@@ -55,12 +55,13 @@ class DashboardPage(QWidget):
         finance_grid.setHorizontalSpacing(18)
         finance_grid.setVerticalSpacing(18)
 
-        self.total_card = StatisticCard("Teljes tervezett költség", "0 Ft")
-        self.deposit_card = StatisticCard("Aktív foglalók", "0 Ft")
-        self.paid_card = StatisticCard("Rendezett összegek", "0 Ft")
-        self.remaining_card = StatisticCard("Fennmaradó összeg", "0 Ft")
+        self.total_card = StatisticCard("Teljes tervezett költség", "0 Ft", "accent")
+        self.deposit_card = StatisticCard("Aktív foglalók", "0 Ft", "warning")
+        self.paid_card = StatisticCard("Rendezett összegek", "0 Ft", "success")
+        self.remaining_card = StatisticCard("Fennmaradó összeg", "0 Ft", "danger")
         self.tasks_card = StatisticCard("Elvégzett feladatok", "0 / 0")
         self.guests_card = StatisticCard("Visszaigazolt létszám", "0 / 0")
+        self.dinner_card = StatisticCard("Vacsorázó vendégek", "0", "success")
 
         cards = (
             self.total_card,
@@ -69,6 +70,7 @@ class DashboardPage(QWidget):
             self.remaining_card,
             self.tasks_card,
             self.guests_card,
+            self.dinner_card,
         )
 
         for index, card in enumerate(cards):
@@ -121,6 +123,7 @@ class DashboardPage(QWidget):
         self.guests_card.set_value(
             f"{guest_summary['confirmed']} / {guest_summary['planned']}"
         )
+        self.dinner_card.set_value(str(guest_summary["dinner"]))
 
         self.guest_summary_label.setText(
             "<b>Meghívottak:</b> "
@@ -128,7 +131,10 @@ class DashboardPage(QWidget):
             f"{guest_summary['confirmed']} részt vesz • "
             f"{guest_summary['waiting']} válaszra vár • "
             f"{guest_summary['declined']} nem vesz részt • "
-            f"{guest_summary['dinner']} vacsoravendég"
+            f"{guest_summary['confirmed_adults']} felnőtt • "
+            f"{guest_summary['confirmed_children']} gyermek • "
+            f"{guest_summary['dinner']} vacsorázik • "
+            f"{guest_summary['not_dinner']} nem vacsorázik"
         )
 
         self._refresh_deadlines()

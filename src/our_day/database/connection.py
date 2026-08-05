@@ -77,6 +77,8 @@ def initialize_database() -> None:
                 table_name TEXT,
                 table_id INTEGER,
                 parent_guest_id INTEGER,
+                family_group_id INTEGER,
+                family_name TEXT,
                 notes TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -100,4 +102,98 @@ def initialize_database() -> None:
             )
             """
         )
+
+        if not _column_exists(connection, "guests", "family_group_id"):
+            connection.execute(
+                "ALTER TABLE guests ADD COLUMN family_group_id INTEGER"
+            )
+        if not _column_exists(connection, "guests", "family_name"):
+            connection.execute(
+                "ALTER TABLE guests ADD COLUMN family_name TEXT"
+            )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS guest_preferences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL,
+                name TEXT NOT NULL,
+                UNIQUE(category, name)
+            )
+            """
+        )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS guest_preference_rel (
+                guest_id INTEGER NOT NULL,
+                preference_id INTEGER NOT NULL,
+                PRIMARY KEY (guest_id, preference_id),
+                FOREIGN KEY (guest_id) REFERENCES guests(id) ON DELETE CASCADE,
+                FOREIGN KEY (preference_id)
+                    REFERENCES guest_preferences(id) ON DELETE CASCADE
+            )
+            """
+        )
+
+        default_preferences = (
+            ("Étrend", "Vegetáriánus"),
+            ("Étrend", "Vegán"),
+            ("Érzékenység", "Gluténérzékeny"),
+            ("Érzékenység", "Laktózérzékeny"),
+            ("Érzékenység", "Tejérzékeny"),
+            ("Allergia", "Diófélék"),
+            ("Allergia", "Mogyoró"),
+        )
+
+        connection.executemany(
+            """
+            INSERT OR IGNORE INTO guest_preferences(category, name)
+            VALUES (?, ?)
+            """,
+            default_preferences,
+        )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS invitation_groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                group_type TEXT NOT NULL DEFAULT 'Egyéb',
+                contact_name TEXT,
+                email TEXT,
+                phone TEXT,
+                invitation_sent_date TEXT,
+                rsvp_due_date TEXT,
+                notes TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        if not _column_exists(connection, "guests", "invitation_group_id"):
+            connection.execute(
+                "ALTER TABLE guests ADD COLUMN invitation_group_id INTEGER"
+            )
+        if not _column_exists(connection, "guests", "response_date"):
+            connection.execute(
+                "ALTER TABLE guests ADD COLUMN response_date TEXT"
+            )
+        if not _column_exists(connection, "guests", "is_contact_person"):
+            connection.execute(
+                "ALTER TABLE guests ADD COLUMN is_contact_person INTEGER NOT NULL DEFAULT 0"
+            )
+
+        if not _column_exists(
+            connection,
+            "invitation_groups",
+            "contact_guest_id",
+        ):
+            connection.execute(
+                """
+                ALTER TABLE invitation_groups
+                ADD COLUMN contact_guest_id INTEGER
+                """
+            )
         connection.commit()

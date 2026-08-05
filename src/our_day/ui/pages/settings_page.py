@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from our_day.models.guest_table import GuestTable
+from our_day.services.database_service import DatabaseService
 
 
 class TableDialog(QDialog):
@@ -167,8 +168,66 @@ class SettingsPage(QWidget):
             self._create_preferences_tab(),
             "Étrend és allergiák",
         )
+        tabs.addTab(
+            self._create_database_tab(),
+            "Adatbázis",
+        )
 
         layout.addWidget(tabs, 1)
+
+    def _create_database_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(18)
+
+        title = QLabel("Adatbázis-kezelés")
+        title.setObjectName("sectionTitle")
+
+        description = QLabel(
+            "Itt teljesen kiürítheted az alkalmazás adatbázisát, "
+            "vagy visszatöltheted a beépített demóadatokat."
+        )
+        description.setWordWrap(True)
+        description.setObjectName("pageSubtitle")
+
+        warning = QLabel(
+            "Figyelem: az adatbázis ürítése minden szolgáltatást, "
+            "feladatot, vendéget, csoportot, asztalt és beállítást töröl."
+        )
+        warning.setWordWrap(True)
+        warning.setStyleSheet(
+            """
+            QLabel {
+                background: #FFF0F0;
+                color: #9B2525;
+                border: 1px solid #E8B6B6;
+                border-radius: 10px;
+                padding: 14px;
+                font-weight: 600;
+            }
+            """
+        )
+
+        clear_button = QPushButton("Adatbázis teljes ürítése")
+        clear_button.setObjectName("dangerButton")
+        clear_button.setMinimumHeight(44)
+        clear_button.clicked.connect(self._clear_database)
+
+        demo_button = QPushButton("Demóadatok betöltése")
+        demo_button.setObjectName("primaryButton")
+        demo_button.setMinimumHeight(44)
+        demo_button.clicked.connect(self._load_demo_database)
+
+        layout.addWidget(title)
+        layout.addWidget(description)
+        layout.addWidget(warning)
+        layout.addSpacing(8)
+        layout.addWidget(clear_button)
+        layout.addWidget(demo_button)
+        layout.addStretch()
+
+        return page
 
     def _create_tables_tab(self) -> QWidget:
         page = QWidget()
@@ -331,6 +390,90 @@ class SettingsPage(QWidget):
             "category": self.preferences_table.item(row, 0).text(),
             "name": self.preferences_table.item(row, 1).text(),
         }
+
+    def _clear_database(self) -> None:
+        first_answer = QMessageBox.warning(
+            self,
+            "Adatbázis teljes ürítése",
+            (
+                "Ez a művelet minden jelenlegi adatot véglegesen töröl.\n\n"
+                "Biztosan folytatod?"
+            ),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if first_answer != QMessageBox.Yes:
+            return
+
+        second_answer = QMessageBox.question(
+            self,
+            "Végső megerősítés",
+            (
+                "Az adatbázis kiürítése nem vonható vissza.\n"
+                "Szeretnéd végrehajtani?"
+            ),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if second_answer != QMessageBox.Yes:
+            return
+
+        try:
+            database_path = DatabaseService.clear_database()
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Adatbázishiba",
+                f"Az adatbázis ürítése nem sikerült.\n\n{error}",
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Adatbázis kiürítve",
+            (
+                "Az adatbázis sikeresen kiürült.\n\n"
+                f"Fájl: {database_path}"
+            ),
+        )
+        self.data_changed.emit()
+
+    def _load_demo_database(self) -> None:
+        answer = QMessageBox.question(
+            self,
+            "Demóadatok betöltése",
+            (
+                "A demóadatok betöltése felülírja a jelenlegi adatbázist.\n\n"
+                "Biztosan folytatod?"
+            ),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if answer != QMessageBox.Yes:
+            return
+
+        try:
+            database_path = DatabaseService.load_demo_database()
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Adatbázishiba",
+                f"A demóadatok betöltése nem sikerült.\n\n{error}",
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Demóadatok betöltve",
+            (
+                "A demóadatok sikeresen betöltődtek.\n\n"
+                f"Fájl: {database_path}"
+            ),
+        )
+        self.data_changed.emit()
 
     def _create_table(self) -> None:
         dialog = TableDialog(self)

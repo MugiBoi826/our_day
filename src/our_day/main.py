@@ -1,8 +1,12 @@
 import sys
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QIcon, QPalette
 from PySide6.QtWidgets import QApplication, QStyleFactory
 
-from our_day.database.connection import initialize_database
+from our_day.database.connection import (
+    get_bundle_root,
+    initialize_database,
+)
 from our_day.ui.main_window import MainWindow
 
 
@@ -24,8 +28,18 @@ def apply_light_theme(app: QApplication) -> None:
 
 def main() -> None:
     initialize_database()
+    QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
+
     app = QApplication(sys.argv)
     app.setApplicationName("Our Day")
+    app.setOrganizationName("Our Day")
+    app.setApplicationVersion("0.21.0")
+
+    icon_path = get_bundle_root() / "assets" / "our_day.ico"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
     apply_light_theme(app)
     window = MainWindow()
     window.show()

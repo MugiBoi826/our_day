@@ -1,27 +1,31 @@
-# Python virtual environment
+# Python
 .venv/
-venv/
-
-# Python cache
 __pycache__/
 *.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Environment variables
-.env
-
-# VS Code
+# IDE / OS
 .vscode/
-
-# PyCharm / IntelliJ
 .idea/
-
-# OS generated files
 .DS_Store
 Thumbs.db
 
-# Build / distribution
-build/
-dist/
-*.egg-info/
-# Local application database
-data/*.db
+# Local application data
+/data/*.db
+/data/*.db-*
+
+# Generated tests/exports
+/tests/data/*.db
+/tests/data/*.xlsx
+
+# Build output
+/build/
+/dist/
+/installer-dist/
+*.spec.bak
+
+# Environment
+.env

@@ -41,7 +41,7 @@ class InvitationGroupRepository:
                     invitation_sent_date, rsvp_due_date, notes,
                     contact_guest_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     group.name,

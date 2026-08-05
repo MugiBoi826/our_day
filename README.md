@@ -82,3 +82,10 @@ A kézzel indított `workflow_dispatch` futás továbbra is csak artifactot kés
 - dashboardon pár neve és automatikus visszaszámlálás
 - költségkeret összevetése a tervezett szolgáltatási költségekkel
 - meglévő adatbázisok automatikus, adatvesztés nélküli migrációja
+
+
+## 0.22.1 Meghívási csoport mentési javítás
+
+- javítva az invitation_groups INSERT mező- és értékszám eltérése
+- 9 oszlophoz most 9 SQL helykitöltő tartozik
+- új meghívási csoport létrehozása ismét működik

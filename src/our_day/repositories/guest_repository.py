@@ -411,6 +411,106 @@ class GuestRepository:
             ),
         }
 
+
+    def get_preference_summary(self) -> list[dict[str, object]]:
+        with get_connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    p.category,
+                    p.name,
+                    COUNT(DISTINCT rel.guest_id) AS guest_count
+                FROM guest_preferences p
+                LEFT JOIN guest_preference_rel rel
+                    ON rel.preference_id = p.id
+                LEFT JOIN guests g
+                    ON g.id = rel.guest_id
+                   AND g.attendance_status = 'Részt vesz'
+                GROUP BY p.id, p.category, p.name
+                HAVING guest_count > 0
+                ORDER BY
+                    CASE p.category
+                        WHEN 'Étrend' THEN 0
+                        WHEN 'Érzékenység' THEN 1
+                        WHEN 'Allergia' THEN 2
+                        ELSE 3
+                    END,
+                    guest_count DESC,
+                    p.name COLLATE NOCASE
+                """
+            ).fetchall()
+
+        return [
+            {
+                "category": str(row["category"]),
+                "name": str(row["name"]),
+                "count": int(row["guest_count"]),
+            }
+            for row in rows
+        ]
+
+    def get_table_summary(self) -> list[dict[str, object]]:
+        with get_connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    t.id,
+                    t.name,
+                    t.capacity,
+                    COUNT(
+                        CASE
+                            WHEN g.attendance_status = 'Részt vesz'
+                            THEN g.id
+                        END
+                    ) AS assigned_count
+                FROM guest_tables t
+                LEFT JOIN guests g
+                    ON g.table_id = t.id
+                GROUP BY t.id, t.name, t.capacity
+                ORDER BY t.name COLLATE NOCASE
+                """
+            ).fetchall()
+
+        return [
+            {
+                "id": int(row["id"]),
+                "name": str(row["name"]),
+                "capacity": int(row["capacity"]),
+                "assigned": int(row["assigned_count"]),
+                "remaining": (
+                    int(row["capacity"])
+                    - int(row["assigned_count"])
+                ),
+            }
+            for row in rows
+        ]
+
+    def get_unassigned_confirmed_count(self) -> int:
+        with get_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM guests
+                WHERE attendance_status = 'Részt vesz'
+                  AND table_id IS NULL
+                """
+            ).fetchone()
+
+        return int(row["count"] or 0)
+
+    def get_contactable_count(self) -> int:
+        with get_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM guests
+                WHERE COALESCE(email, '') <> ''
+                   OR COALESCE(phone, '') <> ''
+                """
+            ).fetchone()
+
+        return int(row["count"] or 0)
+
     def get_parent_name(
         self,
         parent_guest_id: int | None,

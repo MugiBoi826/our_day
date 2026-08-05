@@ -10,6 +10,7 @@ from our_day.ui.pages.entries_page import EntriesPage
 from our_day.ui.pages.tasks_page import TasksPage
 from our_day.ui.pages.guests_page import GuestsPage
 from our_day.ui.pages.settings_page import SettingsPage
+from our_day.ui.pages.statistics_page import StatisticsPage
 from our_day.ui.pages.placeholder_page import PlaceholderPage
 from our_day.ui.widgets.sidebar import Sidebar
 
@@ -29,11 +30,15 @@ class MainWindow(QMainWindow):
             self.preference_repo,
             self.group_repo,
         )
+        self.statistics=StatisticsPage(
+            self.guest_repo,
+            self.group_repo,
+        )
         self.settings=SettingsPage(
             self.table_repo,
             self.preference_repo,
         )
-        for p in (self.dashboard,self.entries,self.services,self.tasks,self.lists,self.settings): self.pages.addWidget(p)
+        for p in (self.dashboard,self.entries,self.services,self.tasks,self.lists,self.statistics,self.settings): self.pages.addWidget(p)
         self.sidebar=Sidebar(); self.sidebar.page_selected.connect(self._change)
         self.entries.data_changed.connect(self._refresh); self.services.data_changed.connect(self._refresh); self.tasks.data_changed.connect(self._refresh); self.lists.data_changed.connect(self._refresh); self.settings.data_changed.connect(self._refresh)
         self.dashboard.create_entry_requested.connect(self.entries.open_create_dialog)
@@ -86,9 +91,31 @@ class MainWindow(QMainWindow):
             gridline-color: #F0F0F3;
         }
     
-        QHeaderView::section{background:#F7F7FA;padding:10px;font-weight:600}
+        
+        QHeaderView::section {
+            background: #F7F7FA;
+            padding: 10px;
+            font-weight: 600;
+            border: none;
+            border-bottom: 1px solid #E7E8EE;
+        }
+
+        QProgressBar {
+            background: #EEEAF5;
+            border: none;
+            border-radius: 10px;
+            text-align: center;
+            color: #4B3A64;
+            font-weight: 600;
+        }
+
+        QProgressBar::chunk {
+            background: #6B4EA0;
+            border-radius: 10px;
+        }
+    
         """)
         self._refresh()
 
     def _change(self,index): self.pages.setCurrentIndex(index); self._refresh()
-    def _refresh(self): self.dashboard.refresh(); self.entries.refresh(); self.services.refresh(); self.tasks.refresh(); self.lists.refresh(); self.settings.refresh()
+    def _refresh(self): self.dashboard.refresh(); self.entries.refresh(); self.services.refresh(); self.tasks.refresh(); self.lists.refresh(); self.statistics.refresh(); self.settings.refresh()

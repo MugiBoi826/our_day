@@ -96,6 +96,69 @@ class InvitationGroupRepository:
             )
             connection.commit()
 
+
+    def get_rsvp_overview(self) -> list[dict[str, object]]:
+        with get_connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    ig.id,
+                    ig.name,
+                    ig.group_type,
+                    ig.rsvp_due_date,
+                    COUNT(g.id) AS total,
+                    SUM(
+                        CASE
+                            WHEN g.attendance_status = 'Részt vesz'
+                            THEN 1 ELSE 0
+                        END
+                    ) AS confirmed,
+                    SUM(
+                        CASE
+                            WHEN g.attendance_status = 'Válaszra vár'
+                            THEN 1 ELSE 0
+                        END
+                    ) AS waiting,
+                    SUM(
+                        CASE
+                            WHEN g.attendance_status = 'Nem vesz részt'
+                            THEN 1 ELSE 0
+                        END
+                    ) AS declined
+                FROM invitation_groups ig
+                LEFT JOIN guests g
+                    ON g.invitation_group_id = ig.id
+                GROUP BY
+                    ig.id,
+                    ig.name,
+                    ig.group_type,
+                    ig.rsvp_due_date
+                ORDER BY
+                    CASE
+                        WHEN ig.rsvp_due_date IS NULL THEN 1
+                        ELSE 0
+                    END,
+                    ig.rsvp_due_date,
+                    ig.name COLLATE NOCASE
+                """
+            ).fetchall()
+
+        return [
+            {
+                "id": int(row["id"]),
+                "name": str(row["name"]),
+                "group_type": str(row["group_type"]),
+                "rsvp_due_date": self._from_db(
+                    row["rsvp_due_date"]
+                ),
+                "total": int(row["total"] or 0),
+                "confirmed": int(row["confirmed"] or 0),
+                "waiting": int(row["waiting"] or 0),
+                "declined": int(row["declined"] or 0),
+            }
+            for row in rows
+        ]
+
     def list_group_members(
         self,
         group_id: int,

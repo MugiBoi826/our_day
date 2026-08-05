@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
+    QFileDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from our_day.services.guest_export_service import GuestExportService
 from our_day.ui.dialogs.guest_dialog import GuestDialog
 from our_day.ui.dialogs.invitation_group_dialog import (
     InvitationGroupDialog,
@@ -68,6 +70,10 @@ class GuestsPage(QWidget):
         header_text.addWidget(title)
         header_text.addWidget(subtitle)
 
+        export_button = QPushButton("Excel export")
+        export_button.setObjectName("secondaryButton")
+        export_button.clicked.connect(self._export_excel)
+
         new_group_button = QPushButton("+ Új csoport")
         new_group_button.setObjectName("secondaryButton")
         new_group_button.clicked.connect(self._create_group)
@@ -78,6 +84,7 @@ class GuestsPage(QWidget):
 
         header_layout.addLayout(header_text)
         header_layout.addStretch()
+        header_layout.addWidget(export_button)
         header_layout.addWidget(new_group_button)
         header_layout.addWidget(new_guest_button)
 
@@ -546,6 +553,41 @@ class GuestsPage(QWidget):
                     item.setForeground(Qt.darkRed)
 
                 self.table.setItem(row, column, item)
+
+    def _export_excel(self) -> None:
+        default_name = (
+            f"our_day_vendeglista_"
+            f"{date.today().isoformat()}.xlsx"
+        )
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Vendéglista Excel export",
+            default_name,
+            "Excel munkafüzet (*.xlsx)",
+        )
+
+        if not file_path:
+            return
+
+        try:
+            GuestExportService.export(file_path)
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Exportálási hiba",
+                (
+                    "Az Excel export nem sikerült.\n\n"
+                    f"{error}"
+                ),
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Export elkészült",
+            f"A vendéglista sikeresen elkészült:\n{file_path}",
+        )
 
     def _group_changed(self, current, previous) -> None:
         self.current_group_id = (

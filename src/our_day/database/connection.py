@@ -59,4 +59,45 @@ def initialize_database() -> None:
             )
             """
         )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS guests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT,
+                phone TEXT,
+                guest_type TEXT NOT NULL DEFAULT 'Felnőtt',
+                invitation_status TEXT NOT NULL DEFAULT 'Tervezett',
+                attendance_status TEXT NOT NULL DEFAULT 'Válaszra vár',
+                has_plus_one INTEGER NOT NULL DEFAULT 0,
+                plus_one_name TEXT,
+                attends_dinner INTEGER NOT NULL DEFAULT 1,
+                dietary_notes TEXT,
+                table_name TEXT,
+                table_id INTEGER,
+                parent_guest_id INTEGER,
+                notes TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        if not _column_exists(connection, "guests", "table_id"):
+            connection.execute("ALTER TABLE guests ADD COLUMN table_id INTEGER")
+        if not _column_exists(connection, "guests", "parent_guest_id"):
+            connection.execute("ALTER TABLE guests ADD COLUMN parent_guest_id INTEGER")
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS guest_tables (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                capacity INTEGER NOT NULL DEFAULT 8,
+                notes TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         connection.commit()

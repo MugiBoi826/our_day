@@ -1,9 +1,13 @@
 from PySide6.QtWidgets import QHBoxLayout,QMainWindow,QStackedWidget,QWidget
 from our_day.repositories.entry_repository import EntryRepository
 from our_day.repositories.task_repository import TaskRepository
+from our_day.repositories.guest_repository import GuestRepository
+from our_day.repositories.guest_table_repository import GuestTableRepository
 from our_day.ui.pages.dashboard_page import DashboardPage
 from our_day.ui.pages.entries_page import EntriesPage
 from our_day.ui.pages.tasks_page import TasksPage
+from our_day.ui.pages.guests_page import GuestsPage
+from our_day.ui.pages.settings_page import SettingsPage
 from our_day.ui.pages.placeholder_page import PlaceholderPage
 from our_day.ui.widgets.sidebar import Sidebar
 
@@ -11,17 +15,17 @@ from our_day.ui.widgets.sidebar import Sidebar
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__(); self.setWindowTitle("Our Day"); self.resize(1280,820)
-        self.entry_repo=EntryRepository(); self.task_repo=TaskRepository()
+        self.entry_repo=EntryRepository(); self.task_repo=TaskRepository(); self.guest_repo=GuestRepository(); self.table_repo=GuestTableRepository()
         self.pages=QStackedWidget()
-        self.dashboard=DashboardPage(self.entry_repo,self.task_repo)
+        self.dashboard=DashboardPage(self.entry_repo,self.task_repo,self.guest_repo)
         self.entries=EntriesPage(self.entry_repo)
         self.services=EntriesPage(self.entry_repo,"Szolgáltatások","Helyszín, fotós, zenekar és további szolgáltatók.","Szolgáltatás")
         self.tasks=TasksPage(self.task_repo)
-        self.lists=PlaceholderPage("Listák","A listák kezelése a következő fejlesztési lépésben készül el.")
-        self.settings=PlaceholderPage("Beállítások","Általános alkalmazásbeállítások.")
+        self.lists=GuestsPage(self.guest_repo,self.table_repo)
+        self.settings=SettingsPage(self.table_repo)
         for p in (self.dashboard,self.entries,self.services,self.tasks,self.lists,self.settings): self.pages.addWidget(p)
         self.sidebar=Sidebar(); self.sidebar.page_selected.connect(self._change)
-        self.entries.data_changed.connect(self._refresh); self.services.data_changed.connect(self._refresh); self.tasks.data_changed.connect(self._refresh)
+        self.entries.data_changed.connect(self._refresh); self.services.data_changed.connect(self._refresh); self.tasks.data_changed.connect(self._refresh); self.lists.data_changed.connect(self._refresh); self.settings.data_changed.connect(self._refresh)
         self.dashboard.create_entry_requested.connect(self.entries.open_create_dialog)
         root=QWidget(); l=QHBoxLayout(root); l.setContentsMargins(0,0,0,0); l.addWidget(self.sidebar); l.addWidget(self.pages,1); self.setCentralWidget(root)
         self.setStyleSheet("""
@@ -45,4 +49,4 @@ class MainWindow(QMainWindow):
         self._refresh()
 
     def _change(self,index): self.pages.setCurrentIndex(index); self._refresh()
-    def _refresh(self): self.dashboard.refresh(); self.entries.refresh(); self.services.refresh(); self.tasks.refresh()
+    def _refresh(self): self.dashboard.refresh(); self.entries.refresh(); self.services.refresh(); self.tasks.refresh(); self.lists.refresh(); self.settings.refresh()

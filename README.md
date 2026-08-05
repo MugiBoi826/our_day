@@ -49,3 +49,24 @@ Első indításkor üres adatbázis készül. A demóadatok a **Beállítások �
 ## GitHub Actions
 
 A `.github/workflows/build-windows-installer.yml` workflow kézzel vagy `v*` tag pusholásakor elkészíti a Windows telepítőt, és letölthető artifactként feltölti.
+
+
+## Automatikus GitHub Release
+
+A Windows telepítő GitHub Release-be történő publikálásához hozz létre és pusholj egy verziótaget:
+
+```powershell
+git tag v0.21.0
+git push origin v0.21.0
+```
+
+A `Build Windows installer` workflow ezután automatikusan:
+
+1. elkészíti az `OurDay.exe` alkalmazást;
+2. elkészíti az Inno Setup telepítőt;
+3. feltölti a telepítőt Actions artifactként;
+4. létrehozza az `Our Day v0.21.0` GitHub Release-t;
+5. a telepítőt közvetlenül letölthető release assetként csatolja;
+6. automatikusan generált release notes-ot készít.
+
+A kézzel indított `workflow_dispatch` futás továbbra is csak artifactot készít, GitHub Release-t nem.

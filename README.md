@@ -28,7 +28,7 @@ Telepítsd az Inno Setup 6-ot, majd:
 powershell.exe -ExecutionPolicy Bypass -File .uild_installer.ps1
 ```
 
-Kimenet: `installer-dist\OurDay-Setup-0.21.0.exe`.
+Kimenet: `installer-dist\OurDay-Setup-0.22.0.exe`.
 
 A telepítő automatikusan létrehoz:
 
@@ -56,8 +56,8 @@ A `.github/workflows/build-windows-installer.yml` workflow kézzel vagy `v*` tag
 A Windows telepítő GitHub Release-be történő publikálásához hozz létre és pusholj egy verziótaget:
 
 ```powershell
-git tag v0.21.0
-git push origin v0.21.0
+git tag v0.22.0
+git push origin v0.22.0
 ```
 
 A `Build Windows installer` workflow ezután automatikusan:
@@ -65,8 +65,20 @@ A `Build Windows installer` workflow ezután automatikusan:
 1. elkészíti az `OurDay.exe` alkalmazást;
 2. elkészíti az Inno Setup telepítőt;
 3. feltölti a telepítőt Actions artifactként;
-4. létrehozza az `Our Day v0.21.0` GitHub Release-t;
+4. létrehozza az `Our Day v0.22.0` GitHub Release-t;
 5. a telepítőt közvetlenül letölthető release assetként csatolja;
 6. automatikusan generált release notes-ot készít.
 
 A kézzel indított `workflow_dispatch` futás továbbra is csak artifactot készít, GitHub Release-t nem.
+
+
+## 0.22.0 Esküvő alapadatai
+
+- aktív esküvői projekt külön adatmodellben
+- menyasszony és vőlegény neve
+- esküvő dátuma, helyszíne és címe
+- teljes tervezett költségkeret
+- megjegyzések
+- dashboardon pár neve és automatikus visszaszámlálás
+- költségkeret összevetése a tervezett szolgáltatási költségekkel
+- meglévő adatbázisok automatikus, adatvesztés nélküli migrációja

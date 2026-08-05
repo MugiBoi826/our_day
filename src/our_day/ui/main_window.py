@@ -5,6 +5,7 @@ from our_day.repositories.guest_repository import GuestRepository
 from our_day.repositories.guest_table_repository import GuestTableRepository
 from our_day.repositories.preference_repository import PreferenceRepository
 from our_day.repositories.invitation_group_repository import InvitationGroupRepository
+from our_day.repositories.wedding_repository import WeddingRepository
 from our_day.ui.pages.dashboard_page import DashboardPage
 from our_day.ui.pages.entries_page import EntriesPage
 from our_day.ui.pages.tasks_page import TasksPage
@@ -18,9 +19,9 @@ from our_day.ui.widgets.sidebar import Sidebar
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__(); self.setWindowTitle("Our Day"); self.resize(1280,820)
-        self.entry_repo=EntryRepository(); self.task_repo=TaskRepository(); self.guest_repo=GuestRepository(); self.table_repo=GuestTableRepository(); self.preference_repo=PreferenceRepository(); self.group_repo=InvitationGroupRepository()
+        self.entry_repo=EntryRepository(); self.task_repo=TaskRepository(); self.guest_repo=GuestRepository(); self.table_repo=GuestTableRepository(); self.preference_repo=PreferenceRepository(); self.group_repo=InvitationGroupRepository(); self.wedding_repo=WeddingRepository()
         self.pages=QStackedWidget()
-        self.dashboard=DashboardPage(self.entry_repo,self.task_repo,self.guest_repo)
+        self.dashboard=DashboardPage(self.entry_repo,self.task_repo,self.guest_repo,self.wedding_repo)
         self.entries=EntriesPage(self.entry_repo)
         self.services=EntriesPage(self.entry_repo,"Szolgáltatások","Helyszín, fotós, zenekar és további szolgáltatók.","Szolgáltatás")
         self.tasks=TasksPage(self.task_repo)
@@ -37,6 +38,7 @@ class MainWindow(QMainWindow):
         self.settings=SettingsPage(
             self.table_repo,
             self.preference_repo,
+            self.wedding_repo,
         )
         for p in (self.dashboard,self.entries,self.services,self.tasks,self.lists,self.statistics,self.settings): self.pages.addWidget(p)
         self.sidebar=Sidebar(); self.sidebar.page_selected.connect(self._change)
@@ -53,6 +55,10 @@ class MainWindow(QMainWindow):
         QLabel#pageSubtitle{color:#707070;background:transparent}
         QLabel#sectionTitle{font-size:17px;font-weight:700;background:transparent}
         QFrame#statCard,QFrame#contentCard{background:white;border:1px solid #E7E8EE;border-radius:14px}
+        QFrame#weddingHero{background:#F1ECFA;border:1px solid #D8C8EF;border-radius:18px}
+        QLabel#weddingTitle{font-size:30px;font-weight:700;color:#4F347D;background:transparent}
+        QLabel#weddingCountdown{font-size:17px;font-weight:600;color:#6B4EA0;background:transparent}
+        QLabel#weddingLocation{color:#6F6480;background:transparent}
         QLabel#statTitle{color:#777;background:transparent} QLabel#statValue{font-size:24px;font-weight:700;background:transparent}
         QPushButton#primaryButton{background:#6B4EA0;color:white;border:none;border-radius:10px;padding:11px 18px;font-weight:600}
         QPushButton#secondaryButton{background:white;border:1px solid #D9D9DF;border-radius:9px;padding:9px 14px}

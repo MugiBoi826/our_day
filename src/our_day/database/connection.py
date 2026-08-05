@@ -98,6 +98,24 @@ def initialize_database() -> None:
     with get_connection() as connection:
         connection.execute(
             """
+            CREATE TABLE IF NOT EXISTS weddings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bride_name TEXT,
+                groom_name TEXT,
+                wedding_date TEXT,
+                venue_name TEXT,
+                venue_address TEXT,
+                budget_amount REAL NOT NULL DEFAULT 0,
+                notes TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS entries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 entry_type TEXT NOT NULL,

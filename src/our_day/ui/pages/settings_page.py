@@ -1,8 +1,13 @@
-from PySide6.QtCore import Signal
+from datetime import date
+
+from PySide6.QtCore import QDate, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
+    QCheckBox,
+    QDateEdit,
     QDialog,
+    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
@@ -20,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from our_day.models.guest_table import GuestTable
+from our_day.models.wedding import Wedding
 from our_day.services.database_service import DatabaseService
 
 
@@ -142,10 +148,12 @@ class SettingsPage(QWidget):
         self,
         table_repository,
         preference_repository,
+        wedding_repository,
     ) -> None:
         super().__init__()
         self.table_repository = table_repository
         self.preference_repository = preference_repository
+        self.wedding_repository = wedding_repository
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(36, 30, 36, 30)
@@ -163,6 +171,7 @@ class SettingsPage(QWidget):
         layout.addWidget(subtitle)
 
         tabs = QTabWidget()
+        tabs.addTab(self._create_wedding_tab(), "Esküvő")
         tabs.addTab(self._create_tables_tab(), "Asztalok")
         tabs.addTab(
             self._create_preferences_tab(),
@@ -174,6 +183,149 @@ class SettingsPage(QWidget):
         )
 
         layout.addWidget(tabs, 1)
+
+    def _create_wedding_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(18)
+
+        title = QLabel("Esküvő alapadatai")
+        title.setObjectName("sectionTitle")
+
+        description = QLabel(
+            "Ezek az adatok jelennek meg az Áttekintés oldalon, és "
+            "a költségkerethez viszonyítva számoljuk a szolgáltatásokat."
+        )
+        description.setWordWrap(True)
+        description.setObjectName("pageSubtitle")
+
+        form = QFormLayout()
+        form.setSpacing(14)
+
+        self.bride_name_input = QLineEdit()
+        self.bride_name_input.setPlaceholderText("Például: Anna")
+
+        self.groom_name_input = QLineEdit()
+        self.groom_name_input.setPlaceholderText("Például: Péter")
+
+        self.wedding_date_enabled = QCheckBox("Esküvő dátuma megadva")
+        self.wedding_date_input = QDateEdit(QDate.currentDate().addYears(1))
+        self.wedding_date_input.setCalendarPopup(True)
+        self.wedding_date_input.setDisplayFormat("yyyy.MM.dd.")
+        self.wedding_date_input.setEnabled(False)
+        self.wedding_date_enabled.toggled.connect(
+            self.wedding_date_input.setEnabled
+        )
+
+        date_container = QWidget()
+        date_layout = QHBoxLayout(date_container)
+        date_layout.setContentsMargins(0, 0, 0, 0)
+        date_layout.addWidget(self.wedding_date_enabled)
+        date_layout.addWidget(self.wedding_date_input, 1)
+
+        self.venue_name_input = QLineEdit()
+        self.venue_name_input.setPlaceholderText("Helyszín neve")
+
+        self.venue_address_input = QLineEdit()
+        self.venue_address_input.setPlaceholderText("Helyszín címe")
+
+        self.budget_input = QDoubleSpinBox()
+        self.budget_input.setRange(0, 999_999_999)
+        self.budget_input.setDecimals(0)
+        self.budget_input.setSingleStep(100_000)
+        self.budget_input.setSuffix(" Ft")
+        self.budget_input.setGroupSeparatorShown(True)
+
+        self.wedding_notes_input = QTextEdit()
+        self.wedding_notes_input.setPlaceholderText(
+            "Fontos közös megjegyzések az esküvőről"
+        )
+        self.wedding_notes_input.setMinimumHeight(110)
+
+        form.addRow("Menyasszony neve", self.bride_name_input)
+        form.addRow("Vőlegény neve", self.groom_name_input)
+        form.addRow("Esküvő dátuma", date_container)
+        form.addRow("Helyszín neve", self.venue_name_input)
+        form.addRow("Helyszín címe", self.venue_address_input)
+        form.addRow("Teljes költségkeret", self.budget_input)
+        form.addRow("Megjegyzés", self.wedding_notes_input)
+
+        save_button = QPushButton("Esküvő adatainak mentése")
+        save_button.setObjectName("primaryButton")
+        save_button.setMinimumHeight(44)
+        save_button.clicked.connect(self._save_wedding)
+
+        layout.addWidget(title)
+        layout.addWidget(description)
+        layout.addLayout(form)
+        layout.addWidget(save_button)
+        layout.addStretch()
+        return page
+
+    def _save_wedding(self) -> None:
+        selected_date = None
+        if self.wedding_date_enabled.isChecked():
+            value = self.wedding_date_input.date()
+            selected_date = date(value.year(), value.month(), value.day())
+
+        wedding = Wedding(
+            bride_name=self.bride_name_input.text().strip(),
+            groom_name=self.groom_name_input.text().strip(),
+            wedding_date=selected_date,
+            venue_name=self.venue_name_input.text().strip(),
+            venue_address=self.venue_address_input.text().strip(),
+            budget_amount=self.budget_input.value(),
+            notes=self.wedding_notes_input.toPlainText().strip(),
+        )
+
+        try:
+            self.wedding_repository.save_active(wedding)
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Mentési hiba",
+                f"Az esküvő adatainak mentése nem sikerült.\n\n{error}",
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Adatok mentve",
+            "Az esküvő alapadatai sikeresen elmentésre kerültek.",
+        )
+        self.data_changed.emit()
+
+    def _load_wedding(self) -> None:
+        wedding = self.wedding_repository.get_active()
+        if wedding is None:
+            self.bride_name_input.clear()
+            self.groom_name_input.clear()
+            self.wedding_date_enabled.setChecked(False)
+            self.venue_name_input.clear()
+            self.venue_address_input.clear()
+            self.budget_input.setValue(0)
+            self.wedding_notes_input.clear()
+            return
+
+        self.bride_name_input.setText(wedding.bride_name)
+        self.groom_name_input.setText(wedding.groom_name)
+        self.venue_name_input.setText(wedding.venue_name)
+        self.venue_address_input.setText(wedding.venue_address)
+        self.budget_input.setValue(wedding.budget_amount)
+        self.wedding_notes_input.setPlainText(wedding.notes)
+
+        if wedding.wedding_date:
+            self.wedding_date_enabled.setChecked(True)
+            self.wedding_date_input.setDate(
+                QDate(
+                    wedding.wedding_date.year,
+                    wedding.wedding_date.month,
+                    wedding.wedding_date.day,
+                )
+            )
+        else:
+            self.wedding_date_enabled.setChecked(False)
 
     def _create_database_tab(self) -> QWidget:
         page = QWidget()
@@ -330,6 +482,7 @@ class SettingsPage(QWidget):
         return page
 
     def refresh(self) -> None:
+        self._load_wedding()
         tables = self.table_repository.list_all()
         self.tables_table.setRowCount(len(tables))
 

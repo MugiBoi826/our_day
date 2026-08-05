@@ -19,6 +19,7 @@ class DatabaseService:
         "tasks",
         "entries",
         "guest_preferences",
+        "weddings",
     )
 
     @classmethod
@@ -43,7 +44,8 @@ class DatabaseService:
                     'guest_tables',
                     'tasks',
                     'entries',
-                    'guest_preferences'
+                    'guest_preferences',
+                    'weddings'
                 )
                 """
             )

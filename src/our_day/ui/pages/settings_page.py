@@ -44,10 +44,22 @@ class TableDialog(QDialog):
         self.capacity_input = QSpinBox()
         self.capacity_input.setRange(1, 100)
         self.capacity_input.setValue(8)
+        self.shape_input = QComboBox()
+        self.shape_input.addItems(
+            (
+                "Kerek",
+                "Ovális",
+                "Téglalap",
+                "Hosszú asztal",
+                "U alakú",
+                "Főasztal",
+            )
+        )
         self.notes_input = QTextEdit()
 
         form.addRow("Név *", self.name_input)
         form.addRow("Férőhely", self.capacity_input)
+        form.addRow("Forma", self.shape_input)
         form.addRow("Megjegyzés", self.notes_input)
         layout.addLayout(form)
 
@@ -67,6 +79,7 @@ class TableDialog(QDialog):
             self.name_input.setText(table.name)
             self.capacity_input.setValue(table.capacity)
             self.notes_input.setPlainText(table.notes)
+            self.shape_input.setCurrentText(table.shape)
 
     def _save(self) -> None:
         if not self.name_input.text().strip():
@@ -84,6 +97,9 @@ class TableDialog(QDialog):
             name=self.name_input.text().strip(),
             capacity=self.capacity_input.value(),
             notes=self.notes_input.toPlainText().strip(),
+            position_x=(self.table.position_x if self.table else 40),
+            position_y=(self.table.position_y if self.table else 40),
+            shape=self.shape_input.currentText(),
         )
 
 

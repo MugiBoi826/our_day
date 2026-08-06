@@ -12,6 +12,7 @@ from our_day.ui.pages.tasks_page import TasksPage
 from our_day.ui.pages.guests_page import GuestsPage
 from our_day.ui.pages.settings_page import SettingsPage
 from our_day.ui.pages.statistics_page import StatisticsPage
+from our_day.ui.pages.seating_page import SeatingPage
 from our_day.ui.pages.placeholder_page import PlaceholderPage
 from our_day.ui.widgets.sidebar import Sidebar
 from our_day.services.database_service import DatabaseService
@@ -38,6 +39,11 @@ class MainWindow(QMainWindow):
             self.preference_repo,
             self.group_repo,
         )
+        self.seating=SeatingPage(
+            self.guest_repo,
+            self.table_repo,
+            self.preference_repo,
+        )
         self.statistics=StatisticsPage(
             self.guest_repo,
             self.group_repo,
@@ -47,9 +53,9 @@ class MainWindow(QMainWindow):
             self.preference_repo,
             self.wedding_repo,
         )
-        for p in (self.dashboard,self.entries,self.services,self.tasks,self.lists,self.statistics,self.settings): self.pages.addWidget(p)
+        for p in (self.dashboard,self.entries,self.services,self.tasks,self.lists,self.seating,self.statistics,self.settings): self.pages.addWidget(p)
         self.sidebar=Sidebar(); self.sidebar.page_selected.connect(self._change)
-        self.entries.data_changed.connect(self._refresh); self.services.data_changed.connect(self._refresh); self.tasks.data_changed.connect(self._refresh); self.lists.data_changed.connect(self._refresh); self.settings.data_changed.connect(self._refresh)
+        self.entries.data_changed.connect(self._refresh); self.services.data_changed.connect(self._refresh); self.tasks.data_changed.connect(self._refresh); self.lists.data_changed.connect(self._refresh); self.seating.data_changed.connect(self._refresh); self.settings.data_changed.connect(self._refresh)
         self.dashboard.create_service_requested.connect(
             self.services.open_create_dialog
         )
@@ -91,6 +97,14 @@ class MainWindow(QMainWindow):
         QLabel#emptyState{background:#FAFAFC;color:#73737A;border:1px dashed #D8D8DF;border-radius:10px;padding:14px}
         QLabel#alertBadge{background:#FFF0F0;color:#B42318;border:1px solid #E8B6B6;border-radius:14px;padding:4px 8px;font-weight:700}
         QFrame#timelineItem{background:#FAFAFC;border:1px solid #ECECF1;border-radius:10px}
+        QFrame#seatingTableCard{background:white;border:1px solid #E1E1E8;border-radius:14px}
+        QLabel#seatingTableTitle{font-size:18px;font-weight:700;background:transparent}
+        QLabel#successBadge{background:#ECFDF3;color:#067647;border:1px solid #ABEFC6;border-radius:10px;padding:4px 8px;font-weight:650}
+        QLabel#warningBadge{background:#FFF8E1;color:#8A6500;border:1px solid #E9D58A;border-radius:10px;padding:4px 8px;font-weight:650}
+        QLabel#dangerBadge{background:#FFF0F0;color:#B42318;border:1px solid #E8B6B6;border-radius:10px;padding:4px 8px;font-weight:650}
+        QLabel#seatingWarnings{background:#FFF8E1;color:#735A00;border:1px solid #E9D58A;border-radius:10px;padding:10px;font-weight:600}
+        QProgressBar#seatingProgress::chunk{background:#6B4EA0;border-radius:6px}
+        QProgressBar#dangerProgress::chunk{background:#C83E3E;border-radius:6px}
         QLabel#timelineDate{background:#EEEAF5;color:#5B3F8C;border-radius:8px;padding:8px 5px;font-weight:700}
         QLabel#statTitle{color:#777;background:transparent} QLabel#statValue{font-size:24px;font-weight:700;background:transparent}
         QPushButton#primaryButton{background:#6B4EA0;color:white;border:none;border-radius:10px;padding:11px 18px;font-weight:600}
@@ -187,4 +201,12 @@ class MainWindow(QMainWindow):
             f"Az adatbázis mentése elkészült:\n{exported}",
         )
 
-    def _refresh(self): self.dashboard.refresh(); self.entries.refresh(); self.services.refresh(); self.tasks.refresh(); self.lists.refresh(); self.statistics.refresh(); self.settings.refresh()
+    def _refresh(self):
+        self.dashboard.refresh()
+        self.entries.refresh()
+        self.services.refresh()
+        self.tasks.refresh()
+        self.lists.refresh()
+        self.seating.refresh()
+        self.statistics.refresh()
+        self.settings.refresh()

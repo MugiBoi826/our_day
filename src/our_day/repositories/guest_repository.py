@@ -23,7 +23,9 @@ class GuestRepository:
         g.notes,
         g.invitation_group_id,
         g.response_date,
-        g.is_contact_person
+        g.is_contact_person,
+        g.seating_notes,
+        g.accessibility_required
     """
 
     def list_all(self) -> list[Guest]:
@@ -189,6 +191,9 @@ class GuestRepository:
         root: Guest,
         members: list[Guest],
     ) -> None:
+        self._normalize_seating(root)
+        for member in members:
+            self._normalize_seating(member)
         if root.id is None:
             raise ValueError(
                 "A meghívott azonosítója hiányzik."
@@ -388,6 +393,260 @@ class GuestRepository:
                 ),
             )
             connection.commit()
+
+    def list_confirmed_for_seating(self) -> list[Guest]:
+        return [
+            guest
+            for guest in self.list_all()
+            if guest.attendance_status == "Részt vesz"
+        ]
+
+    def assign_guests_to_table(
+        self,
+        guest_ids: list[int],
+        table_id: int | None,
+    ) -> None:
+        if not guest_ids:
+            return
+
+        placeholders = ",".join(
+            "?"
+            for _ in guest_ids
+        )
+
+        with get_connection() as connection:
+            if table_id is None:
+                connection.execute(
+                    f"""
+                    UPDATE guests
+                    SET table_id = NULL,
+                        table_name = '',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id IN ({placeholders})
+                    """,
+                    tuple(guest_ids),
+                )
+            else:
+                table_row = connection.execute(
+                    """
+                    SELECT name
+                    FROM guest_tables
+                    WHERE id = ?
+                    """,
+                    (table_id,),
+                ).fetchone()
+
+                if table_row is None:
+                    raise ValueError(
+                        "A kiválasztott asztal nem található."
+                    )
+
+                connection.execute(
+                    f"""
+                    UPDATE guests
+                    SET table_id = ?,
+                        table_name = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id IN ({placeholders})
+                      AND attendance_status = 'Részt vesz'
+                    """,
+                    (
+                        table_id,
+                        str(table_row["name"]),
+                        *guest_ids,
+                    ),
+                )
+
+            connection.commit()
+
+    def get_seating_preferences(
+        self,
+        guest_id: int,
+    ) -> dict[str, list[int]]:
+        result = {
+            "with": [],
+            "avoid": [],
+        }
+        with get_connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT related_guest_id, relation_type
+                FROM guest_seating_preferences
+                WHERE guest_id = ?
+                """,
+                (guest_id,),
+            ).fetchall()
+        for row in rows:
+            relation = str(row["relation_type"])
+            if relation in result:
+                result[relation].append(
+                    int(row["related_guest_id"])
+                )
+        return result
+
+    def save_seating_preferences(
+        self,
+        guest_id: int,
+        sit_with_ids: list[int],
+        avoid_ids: list[int],
+        seating_notes: str,
+        accessibility_required: bool,
+    ) -> None:
+        with get_connection() as connection:
+            connection.execute(
+                """
+                DELETE FROM guest_seating_preferences
+                WHERE guest_id = ?
+                """,
+                (guest_id,),
+            )
+            values = [
+                (guest_id, related_id, "with")
+                for related_id in sit_with_ids
+                if related_id != guest_id
+            ]
+            values.extend(
+                (guest_id, related_id, "avoid")
+                for related_id in avoid_ids
+                if related_id != guest_id
+            )
+            if values:
+                connection.executemany(
+                    """
+                    INSERT OR IGNORE INTO guest_seating_preferences(
+                        guest_id,
+                        related_guest_id,
+                        relation_type
+                    )
+                    VALUES (?, ?, ?)
+                    """,
+                    values,
+                )
+            connection.execute(
+                """
+                UPDATE guests
+                SET seating_notes = ?,
+                    accessibility_required = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (
+                    seating_notes,
+                    int(accessibility_required),
+                    guest_id,
+                ),
+            )
+            connection.commit()
+
+    def get_seating_warnings(self) -> list[dict]:
+        guests = self.list_confirmed_for_seating()
+        guest_map = {
+            guest.id: guest
+            for guest in guests
+            if guest.id is not None
+        }
+        warnings: list[dict] = []
+
+        group_tables: dict[int, set[int | None]] = {}
+        group_names: dict[int, str] = {}
+        for guest in guests:
+            group_id = (
+                guest.invitation_group_id
+                or guest.family_group_id
+            )
+            if not group_id:
+                continue
+            group_tables.setdefault(group_id, set()).add(
+                guest.table_id
+            )
+            group_names.setdefault(
+                group_id,
+                guest.family_name or "Meghívási csoport",
+            )
+        for group_id, tables in group_tables.items():
+            assigned_tables = {
+                table_id
+                for table_id in tables
+                if table_id is not None
+            }
+            if len(assigned_tables) > 1:
+                warnings.append(
+                    {
+                        "type": "group_split",
+                        "title": (
+                            f"{group_names[group_id]} tagjai "
+                            "külön asztaloknál ülnek"
+                        ),
+                    }
+                )
+
+        with get_connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT guest_id, related_guest_id, relation_type
+                FROM guest_seating_preferences
+                """
+            ).fetchall()
+
+        for row in rows:
+            guest = guest_map.get(int(row["guest_id"]))
+            related = guest_map.get(
+                int(row["related_guest_id"])
+            )
+            if not guest or not related:
+                continue
+            relation = str(row["relation_type"])
+            if (
+                relation == "with"
+                and guest.table_id is not None
+                and related.table_id is not None
+                and guest.table_id != related.table_id
+            ):
+                warnings.append(
+                    {
+                        "type": "preference",
+                        "title": (
+                            f"{guest.name} és {related.name} "
+                            "nem egy asztalnál ül"
+                        ),
+                    }
+                )
+            if (
+                relation == "avoid"
+                and guest.table_id is not None
+                and guest.table_id == related.table_id
+            ):
+                warnings.append(
+                    {
+                        "type": "conflict",
+                        "title": (
+                            f"{guest.name} és {related.name} "
+                            "azonos asztalnál ül"
+                        ),
+                    }
+                )
+        return warnings
+
+    def cleanup_invalid_seating(self) -> int:
+        with get_connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE guests
+                SET table_id = NULL,
+                    table_name = '',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE attendance_status != 'Részt vesz'
+                  AND table_id IS NOT NULL
+                """
+            )
+            connection.commit()
+            return int(cursor.rowcount)
+
+    @staticmethod
+    def _normalize_seating(guest: Guest) -> None:
+        if guest.attendance_status != "Részt vesz":
+            guest.table_id = None
+            guest.table_name = ""
 
     def get_summary(self) -> dict[str, int]:
         guests = self.list_all()
@@ -824,5 +1083,11 @@ class GuestRepository:
             response_date=row["response_date"],
             is_contact_person=bool(
                 row["is_contact_person"]
+            ),
+            seating_notes=str(
+                row["seating_notes"] or ""
+            ),
+            accessibility_required=bool(
+                row["accessibility_required"]
             ),
         )

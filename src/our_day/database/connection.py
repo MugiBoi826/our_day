@@ -304,4 +304,60 @@ def initialize_database() -> None:
                 """
             )
 
+
+        table_columns = {
+            "position_x": "REAL NOT NULL DEFAULT 40",
+            "position_y": "REAL NOT NULL DEFAULT 40",
+            "shape": "TEXT NOT NULL DEFAULT 'Kerek'",
+        }
+        for column, column_type in table_columns.items():
+            if not _column_exists(
+                connection,
+                "guest_tables",
+                column,
+            ):
+                connection.execute(
+                    f"""
+                    ALTER TABLE guest_tables
+                    ADD COLUMN {column} {column_type}
+                    """
+                )
+
+        guest_seating_columns = {
+            "seating_notes": "TEXT",
+            "accessibility_required": "INTEGER NOT NULL DEFAULT 0",
+        }
+        for column, column_type in guest_seating_columns.items():
+            if not _column_exists(
+                connection,
+                "guests",
+                column,
+            ):
+                connection.execute(
+                    f"""
+                    ALTER TABLE guests
+                    ADD COLUMN {column} {column_type}
+                    """
+                )
+
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS guest_seating_preferences (
+                guest_id INTEGER NOT NULL,
+                related_guest_id INTEGER NOT NULL,
+                relation_type TEXT NOT NULL,
+                PRIMARY KEY (
+                    guest_id,
+                    related_guest_id,
+                    relation_type
+                ),
+                FOREIGN KEY (guest_id)
+                    REFERENCES guests(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY (related_guest_id)
+                    REFERENCES guests(id)
+                    ON DELETE CASCADE
+            )
+            """
+        )
         connection.commit()

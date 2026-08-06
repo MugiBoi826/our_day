@@ -279,7 +279,7 @@ class DashboardPage(QWidget):
         statistics_button = QPushButton("Statisztikák megnyitása")
         statistics_button.setObjectName("secondaryButton")
         statistics_button.clicked.connect(
-            lambda: self.open_page_requested.emit(5)
+            lambda: self.open_page_requested.emit(6)
         )
 
         seating_layout.addWidget(seating_title)

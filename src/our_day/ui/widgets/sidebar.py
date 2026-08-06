@@ -16,7 +16,7 @@ class Sidebar(QFrame):
         layout.addWidget(title)
         group = QButtonGroup(self)
         group.setExclusive(True)
-        for index, text in enumerate(("Áttekintés","Bejegyzések","Szolgáltatások","Feladatok","Meghívottak","Statisztikák","Beállítások")):
+        for index, text in enumerate(("Áttekintés","Bejegyzések","Szolgáltatások","Feladatok","Meghívottak","Ültetési rend","Statisztikák","Beállítások")):
             button = QPushButton(text)
             button.setObjectName("navButton")
             button.setCheckable(True)

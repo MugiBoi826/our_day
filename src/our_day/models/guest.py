@@ -24,6 +24,8 @@ class Guest:
     response_date: object | None = None
     is_contact_person: bool = False
     preference_ids: list[int] = field(default_factory=list)
+    seating_notes: str = ""
+    accessibility_required: bool = False
 
     @property
     def planned_headcount(self) -> int:

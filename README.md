@@ -129,3 +129,97 @@ A kézzel indított `workflow_dispatch` futás továbbra is csak artifactot kés
 - Kifizetve állapotnál a teljes összeg rendezett
 - Lemondva állapot továbbra sem számít bele
 - a közelgő fizetések listája csak aktív, lefoglalt szolgáltatásokat mutat
+
+
+## 0.24.0 Ültetési rend
+
+- külön Ültetési rend oldal
+- visszaigazolt, asztal nélküli vendégek külön listája
+- több vendég egyszerre asztalhoz rendelhető
+- vendégek asztalok között áthelyezhetők
+- vendégek visszatehetők az Asztal nélkül listára
+- kártyás asztalnézet élő férőhely- és kapacitásjelzéssel
+- túlfoglalás előtt megerősítő figyelmeztetés
+- felnőtt/gyermek, vacsora és speciális étkezési igény jelölése
+- vendégenként részletes tooltip
+- összes férőhely, kiosztott helyek és túlfoglalt asztalok statisztikája
+
+
+## 0.24.1 Ültetési rend használhatósági javítás
+
+- Ctrl-kattintás helyett jól látható jelölőnégyzetes kiválasztás
+- kijelölt vendégek számának folyamatos megjelenítése
+- a műveleti gombok csak érvényes kijelölésnél aktívak
+- sikeres áthelyezés után egyértelmű visszajelzés
+- hibák esetén részletes üzenet
+- a demóban több visszaigazolt vendég szándékosan asztal nélkül marad
+- a demó table_id és table_name értékei egységesítve
+
+
+## 0.25.0 Ültetési rend 2.0
+
+- drag & drop vendégmozgatás asztalok között
+- vizuális teremnézet, mozgatható és mentett asztalpozíciókkal
+- kerek és téglalap asztalformák
+- családok és meghívási csoportok szétszakításának jelzése
+- „üljön mellette” és „ne üljön mellette” preferenciák
+- könnyen megközelíthető hely és ültetési megjegyzések
+- asztalonkénti felnőtt, gyermek, étrend és allergia összesítés
+- automatikus ültetési javaslat jóváhagyással
+- Excel ültetési rend, catering és asztal nélküli lista
+- RSVP-változás utáni automatikus és kézi ültetéstisztítás
+
+
+## 0.25.1 Ültetési rend inicializálási javítás
+
+- a központi frissítés most már az Ültetési rend oldalt is frissíti
+- megszűnt az üres Gyors kiosztás és Teremnézet induláskor
+- a tables, guests és preference_map biztonságosan inicializálódik
+- az Automatikus ültetés gomb szükség esetén önállóan is frissít
+- az Excel export is aktuális adatokat tölt be
+- a mozgatható teremnézeti asztalok QGraphicsObject alapra kerültek,
+  így a pozíciómentő signal szabályosan működik
+
+
+## 0.25.2 Teremnézet export és asztalformák
+
+- új formák: kerek, ovális, téglalap, hosszú asztal,
+  U alakú és főasztal
+- asztalformánként eltérő teremnézeti méret
+- teremnézet mentése PNG vagy JPEG képként
+- nyomtatás és PDF-be nyomtatás A4 fekvő tájolással
+- hosszú nevek rövidítése és fix szövegterületek
+- külön név-, létszám- és összesítősor
+- teljes részletek tooltipben maradnak
+
+
+## 0.26.0 Ültetési rend modul refaktor
+
+A nagy seating_page.py logikája kisebb, önálló komponensekre
+lett bontva:
+
+- ui/seating/drag_list.py – drag & drop vendéglista
+- ui/seating/table_item.py – teremnézeti asztalrajzolás
+- ui/seating/room_export.py – képmentés és nyomtatás
+- ui/seating/auto_seating.py – automatikus ültetési javaslat
+- ui/pages/seating_page.py – csak oldal- és műveletkoordináció
+
+Javítások és fejlesztések:
+
+- QPageSize és QPageLayout helyes QtGui importja
+- QPrinter és QPrintDialog helyes QtPrintSupport importja
+- stabil PNG/JPEG teremkép-export
+- stabil A4 fekvő nyomtatás és PDF-be nyomtatás
+- hosszú asztalnevek és összesítők fix szövegterületen
+- teljes adatok tooltipben
+- hat különböző asztalforma
+- hibakezelés Excel- és kép-exportnál
+- biztonságos inicializálás és önálló frissítés
+
+
+## 0.26.1 QPageSize import javítás
+
+- QPageSize a PySide6.QtGui modulból kerül importálásra
+- QPageLayout szintén a PySide6.QtGui modulban marad
+- QPrinter és QPrintDialog a PySide6.QtPrintSupport modulból érkezik
+- az alkalmazás indulását blokkoló ImportError javítva

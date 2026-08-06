@@ -89,3 +89,20 @@ A kézzel indított `workflow_dispatch` futás továbbra is csak artifactot kés
 - javítva az invitation_groups INSERT mező- és értékszám eltérése
 - 9 oszlophoz most 9 SQL helykitöltő tartozik
 - új meghívási csoport létrehozása ismét működik
+
+
+## 0.22.2 Meglévő személyek csoporthoz rendelése
+
+- utólag létrehozott csoportokhoz csoport nélküli személyek rendelhetők
+- több személy egyszerre kijelölhető
+- név szerinti keresés és gyors kijelölés
+
+
+## 0.22.3 Adatbázis export és import
+
+- teljes SQLite adatbázis exportálása választható fájlba
+- adatbázis importálása fájlválasztóval
+- import előtt automatikus biztonsági mentés
+- SQLite integritás- és Our Day struktúraellenőrzés
+- hibás vagy idegen adatbázis nem tölthető be
+- import után az alkalmazás teljes felülete azonnal frissül

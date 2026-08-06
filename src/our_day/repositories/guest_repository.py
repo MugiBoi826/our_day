@@ -353,6 +353,42 @@ class GuestRepository:
 
             connection.commit()
 
+    def list_unassigned_guests(self) -> list[Guest]:
+        return [
+            guest
+            for guest in self.list_all()
+            if guest.invitation_group_id is None
+        ]
+
+    def assign_guests_to_group(
+        self,
+        guest_ids: list[int],
+        invitation_group_id: int,
+    ) -> None:
+        if not guest_ids:
+            return
+
+        placeholders = ",".join(
+            "?"
+            for _ in guest_ids
+        )
+
+        with get_connection() as connection:
+            connection.execute(
+                f"""
+                UPDATE guests
+                SET invitation_group_id = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id IN ({placeholders})
+                  AND invitation_group_id IS NULL
+                """,
+                (
+                    invitation_group_id,
+                    *guest_ids,
+                ),
+            )
+            connection.commit()
+
     def get_summary(self) -> dict[str, int]:
         guests = self.list_all()
 

@@ -1,5 +1,5 @@
 ﻿#define MyAppName "Our Day"
-#define MyAppVersion "0.22.0"
+#define MyAppVersion "0.22.3"
 #define MyAppPublisher "Our Day"
 #define MyAppExeName "OurDay.exe"
 

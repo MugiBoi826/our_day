@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from our_day.services.guest_export_service import GuestExportService
+from our_day.ui.dialogs.assign_guests_dialog import AssignGuestsDialog
 from our_day.ui.dialogs.guest_dialog import GuestDialog
 from our_day.ui.dialogs.invitation_group_dialog import (
     InvitationGroupDialog,
@@ -182,12 +183,17 @@ class GuestsPage(QWidget):
         detail_text.addWidget(self.group_title)
         detail_text.addWidget(self.group_meta)
 
+        self.assign_existing_button = QPushButton("Meglévő személyek")
+        self.assign_existing_button.setObjectName("secondaryButton")
+        self.assign_existing_button.clicked.connect(self._assign_existing_guests)
+
         self.add_member_button = QPushButton("+ Tag hozzáadása")
         self.add_member_button.setObjectName("primaryButton")
         self.add_member_button.clicked.connect(self._create_guest)
 
         detail_header.addLayout(detail_text)
         detail_header.addStretch()
+        detail_header.addWidget(self.assign_existing_button)
         detail_header.addWidget(self.add_member_button)
 
         detail_layout.addLayout(detail_header)
@@ -414,6 +420,7 @@ class GuestsPage(QWidget):
                 "Az összes meghívott egy közös, szűrhető nézetben."
             )
             self.add_member_button.setText("+ Új vendég")
+            self.assign_existing_button.setVisible(False)
         else:
             group = self.group_repository.get_by_id(
                 self.current_group_id
@@ -463,6 +470,7 @@ class GuestsPage(QWidget):
                 self.group_title.setText(group.name)
                 self.group_meta.setText(" • ".join(metadata))
                 self.add_member_button.setText("+ Tag hozzáadása")
+                self.assign_existing_button.setVisible(True)
 
         self.total_card.set_value(str(summary["total"]))
         self.confirmed_card.set_value(
@@ -687,6 +695,35 @@ class GuestsPage(QWidget):
             self.group_repository.delete(group_id)
             self.current_group_id = None
             self.data_changed.emit()
+
+    def _assign_existing_guests(self) -> None:
+        group_id = self._selected_group_id()
+        if group_id is None:
+            QMessageBox.information(self, "Nincs kiválasztott csoport", "Először válassz ki egy meghívási csoportot.")
+            return
+
+        available_guests = self.guest_repository.list_unassigned_guests()
+        if not available_guests:
+            QMessageBox.information(self, "Nincs hozzáadható személy", "Nincs olyan személy, aki még nem tartozik meghívási csoporthoz.")
+            return
+
+        group = self.group_repository.get_by_id(group_id)
+        dialog = AssignGuestsDialog(
+            self,
+            guests=available_guests,
+            group_name=group.name if group else "",
+        )
+        if not dialog.exec():
+            return
+
+        selected_guest_ids = dialog.get_selected_guest_ids()
+        self.guest_repository.assign_guests_to_group(selected_guest_ids, group_id)
+        QMessageBox.information(
+            self,
+            "Személyek hozzáadva",
+            f"{len(selected_guest_ids)} személy sikeresen bekerült a csoportba.",
+        )
+        self.data_changed.emit()
 
     def _create_guest(self) -> None:
         dialog = GuestDialog(

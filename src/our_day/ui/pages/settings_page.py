@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
@@ -337,8 +338,9 @@ class SettingsPage(QWidget):
         title.setObjectName("sectionTitle")
 
         description = QLabel(
-            "Itt teljesen kiürítheted az alkalmazás adatbázisát, "
-            "vagy visszatöltheted a beépített demóadatokat."
+            "Itt exportálhatod vagy importálhatod a teljes adatbázist, "
+            "kiürítheted az alkalmazást, illetve visszatöltheted a "
+            "beépített demóadatokat."
         )
         description.setWordWrap(True)
         description.setObjectName("pageSubtitle")
@@ -361,20 +363,32 @@ class SettingsPage(QWidget):
             """
         )
 
+        export_button = QPushButton("Adatbázis exportálása")
+        export_button.setObjectName("primaryButton")
+        export_button.setMinimumHeight(44)
+        export_button.clicked.connect(self._export_database)
+
+        import_button = QPushButton("Adatbázis importálása")
+        import_button.setObjectName("secondaryButton")
+        import_button.setMinimumHeight(44)
+        import_button.clicked.connect(self._import_database)
+
         clear_button = QPushButton("Adatbázis teljes ürítése")
         clear_button.setObjectName("dangerButton")
         clear_button.setMinimumHeight(44)
         clear_button.clicked.connect(self._clear_database)
 
         demo_button = QPushButton("Demóadatok betöltése")
-        demo_button.setObjectName("primaryButton")
+        demo_button.setObjectName("secondaryButton")
         demo_button.setMinimumHeight(44)
         demo_button.clicked.connect(self._load_demo_database)
 
         layout.addWidget(title)
         layout.addWidget(description)
-        layout.addWidget(warning)
+        layout.addWidget(export_button)
+        layout.addWidget(import_button)
         layout.addSpacing(8)
+        layout.addWidget(warning)
         layout.addWidget(clear_button)
         layout.addWidget(demo_button)
         layout.addStretch()
@@ -543,6 +557,87 @@ class SettingsPage(QWidget):
             "category": self.preferences_table.item(row, 0).text(),
             "name": self.preferences_table.item(row, 1).text(),
         }
+
+    def _export_database(self) -> None:
+        default_name = (
+            f"our_day_backup_{date.today().isoformat()}.db"
+        )
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Our Day adatbázis exportálása",
+            default_name,
+            "SQLite adatbázis (*.db *.sqlite *.sqlite3)",
+        )
+
+        if not file_path:
+            return
+
+        try:
+            exported_path = DatabaseService.export_database(file_path)
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Exportálási hiba",
+                f"Az adatbázis exportálása nem sikerült.\n\n{error}",
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Export elkészült",
+            f"A teljes adatbázis sikeresen exportálva lett.\n\n{exported_path}",
+        )
+
+    def _import_database(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Our Day adatbázis importálása",
+            "",
+            "SQLite adatbázis (*.db *.sqlite *.sqlite3);;Minden fájl (*)",
+        )
+
+        if not file_path:
+            return
+
+        answer = QMessageBox.warning(
+            self,
+            "Adatbázis importálása",
+            (
+                "Az import felülírja az alkalmazás jelenlegi teljes "
+                "adatbázisát.\n\n"
+                "A művelet előtt automatikus biztonsági mentés készül.\n\n"
+                "Biztosan folytatod?"
+            ),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if answer != QMessageBox.Yes:
+            return
+
+        try:
+            database_path, backup_path = DatabaseService.import_database(
+                file_path
+            )
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Importálási hiba",
+                f"Az adatbázis importálása nem sikerült.\n\n{error}",
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Import sikeres",
+            (
+                "Az adatbázis sikeresen importálva lett.\n\n"
+                f"Aktív adatbázis: {database_path}\n\n"
+                f"Automatikus mentés: {backup_path}"
+            ),
+        )
+        self.data_changed.emit()
 
     def _clear_database(self) -> None:
         first_answer = QMessageBox.warning(

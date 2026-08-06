@@ -106,3 +106,26 @@ A kézzel indított `workflow_dispatch` futás továbbra is csak artifactot kés
 - SQLite integritás- és Our Day struktúraellenőrzés
 - hibás vagy idegen adatbázis nem tölthető be
 - import után az alkalmazás teljes felülete azonnal frissül
+
+
+## 0.23.0 Dashboard 2.0
+
+- központi esküvői fejléc visszaszámlálással
+- költségkeret, tervezett költség, rendezett és fizetendő összegek
+- sürgős figyelmeztetések feladatokra, fizetésekre, RSVP-re és ültetésre
+- közös 45 napos eseménylista
+- vendég- és ültetési összesítő
+- gyors új szolgáltatás, feladat, vendég és csoport műveletek
+- közvetlen vendéglista-export és adatbázis-backup
+- görgethető, reszponzívabb kezdőoldal
+
+
+## 0.23.1 Állapotalapú pénzügyi számítás
+
+- a foglalás előtti szolgáltatások nem számítanak bele a költségekbe
+- Ötlet és Ajánlatkérés állapotban minden pénzügyi érték kimarad
+- a számítás Lefoglalva állapottól indul
+- Részben fizetve állapotnál a foglaló rendezett összegként jelenik meg
+- Kifizetve állapotnál a teljes összeg rendezett
+- Lemondva állapot továbbra sem számít bele
+- a közelgő fizetések listája csak aktív, lefoglalt szolgáltatásokat mutat

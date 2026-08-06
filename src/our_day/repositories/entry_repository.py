@@ -60,29 +60,97 @@ class EntryRepository:
             connection.commit()
 
     def get_financial_summary(self, entry_type: str | None = None) -> dict[str, float]:
-        query = """
+        active_statuses = (
+            "Lefoglalva",
+            "Részben fizetve",
+            "Kifizetve",
+        )
+
+        placeholders = ",".join(
+            "?"
+            for _ in active_statuses
+        )
+
+        query = f"""
         SELECT
-          COALESCE(SUM(CASE WHEN status='Lemondva' THEN 0 ELSE total_amount END),0) total_planned,
-          COALESCE(SUM(CASE WHEN status IN ('Kifizetve','Lemondva') THEN 0 ELSE deposit_amount END),0) active_deposits,
-          COALESCE(SUM(CASE WHEN status='Kifizetve' THEN total_amount ELSE 0 END),0) paid_total,
-          COALESCE(SUM(CASE WHEN status IN ('Kifizetve','Lemondva') THEN 0 ELSE MAX(total_amount-deposit_amount,0) END),0) remaining
+          COALESCE(
+            SUM(
+              CASE
+                WHEN status IN ({placeholders})
+                THEN total_amount
+                ELSE 0
+              END
+            ),
+            0
+          ) AS total_planned,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN status IN ('Lefoglalva', 'Részben fizetve')
+                THEN deposit_amount
+                ELSE 0
+              END
+            ),
+            0
+          ) AS active_deposits,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN status = 'Kifizetve'
+                THEN total_amount
+                WHEN status = 'Részben fizetve'
+                THEN deposit_amount
+                ELSE 0
+              END
+            ),
+            0
+          ) AS paid_total,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN status = 'Lefoglalva'
+                THEN MAX(total_amount - deposit_amount, 0)
+                WHEN status = 'Részben fizetve'
+                THEN MAX(total_amount - deposit_amount, 0)
+                ELSE 0
+              END
+            ),
+            0
+          ) AS remaining
         FROM entries
         """
-        params = ()
+
+        params: tuple = active_statuses
+
         if entry_type:
-            query += " WHERE entry_type=?"
-            params = (entry_type,)
+            query += " WHERE entry_type = ?"
+            params = (
+                *active_statuses,
+                entry_type,
+            )
+
         with get_connection() as connection:
-            row = connection.execute(query, params).fetchone()
-        return {"total":float(row["total_planned"]),"deposits":float(row["active_deposits"]),
-                "paid":float(row["paid_total"]),"remaining":float(row["remaining"])}
+            row = connection.execute(
+                query,
+                params,
+            ).fetchone()
+
+        return {
+            "total": float(row["total_planned"]),
+            "deposits": float(row["active_deposits"]),
+            "paid": float(row["paid_total"]),
+            "remaining": float(row["remaining"]),
+        }
 
     def get_upcoming_deadlines(self, days_ahead: int = 10) -> list[dict]:
         today = date.today()
         limit = today + timedelta(days=days_ahead)
         result = []
         for e in self.list_all("Szolgáltatás"):
-            if e.status in ("Kifizetve", "Lemondva"):
+            if e.status not in (
+                "Lefoglalva",
+                "Részben fizetve",
+            ):
                 continue
             if e.deposit_due_date and not e.deposit_paid_date and e.deposit_due_date <= limit:
                 result.append({"title":e.title,"kind":"Foglaló fizetési határidő","date":e.deposit_due_date})

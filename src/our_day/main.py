@@ -35,7 +35,7 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("Our Day")
     app.setOrganizationName("Our Day")
-    app.setApplicationVersion("0.26.1")
+    app.setApplicationVersion("0.26.2")
 
     icon_path = get_bundle_root() / "assets" / "our_day.ico"
     if icon_path.exists():

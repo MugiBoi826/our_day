@@ -223,3 +223,21 @@ Javítások és fejlesztések:
 - QPageLayout szintén a PySide6.QtGui modulban marad
 - QPrinter és QPrintDialog a PySide6.QtPrintSupport modulból érkezik
 - az alkalmazás indulását blokkoló ImportError javítva
+
+
+## 0.26.2 Ültetési rend export frissítés
+
+Az Excel export lapjai most külön célt szolgálnak:
+
+- Asztalok – részletes, vendégenkénti ültetési lista
+- Catering – asztalonkénti konyhai és létszámösszesítő
+- Étrend összesítő – speciális étrendek és allergiák vendéglistával
+- Asztal nélkül – még el nem helyezett visszaigazolt vendégek
+
+A Catering lap tartalmazza:
+
+- összes fő, felnőtt és gyermek
+- vacsorázó és nem vacsorázó vendégek
+- asztalonkénti étrend- és allergiaszámok
+- kapacitás, szabad hely és túlfoglalási állapot
+- teljes összesítő sort

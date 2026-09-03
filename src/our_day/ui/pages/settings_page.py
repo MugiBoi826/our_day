@@ -1,6 +1,6 @@
 from datetime import date
 
-from PySide6.QtCore import QDate, QSettings, Signal
+from PySide6.QtCore import QDate, QObject, QSettings, QThread, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -107,6 +107,28 @@ class TableDialog(QDialog):
         )
 
 
+class CloudSyncWorker(QObject):
+    finished = Signal(str, dict)
+    failed = Signal(str, str)
+
+    def __init__(self, service: SupabaseSyncService, operation: str) -> None:
+        super().__init__()
+        self.service = service
+        self.operation = operation
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            if self.operation == "upload":
+                result = self.service.upload_cache()
+            else:
+                result = self.service.download_to_cache()
+        except Exception as error:
+            self.failed.emit(self.operation, str(error))
+            return
+        self.finished.emit(self.operation, result)
+
+
 class PreferenceDialog(QDialog):
     def __init__(self, parent=None, preference: dict | None = None) -> None:
         super().__init__(parent)
@@ -176,6 +198,17 @@ class SettingsPage(QWidget):
         self.preference_repository = preference_repository
         self.wedding_repository = wedding_repository
         self.cloud_sync = SupabaseSyncService()
+        self._cloud_busy = False
+        self._pending_upload = False
+        self._sync_thread: QThread | None = None
+        self._sync_worker: CloudSyncWorker | None = None
+        self._upload_timer = QTimer(self)
+        self._upload_timer.setSingleShot(True)
+        self._upload_timer.setInterval(1500)
+        self._upload_timer.timeout.connect(lambda: self._start_cloud_sync("upload"))
+        self._download_timer = QTimer(self)
+        self._download_timer.setInterval(60_000)
+        self._download_timer.timeout.connect(lambda: self._start_cloud_sync("download"))
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(36, 30, 36, 30)
@@ -217,7 +250,8 @@ class SettingsPage(QWidget):
         title.setObjectName("sectionTitle")
         description = QLabel(
             "A Supabase a központi adatforrás, az ezen a gépen lévő SQLite "
-            "adatbázis pedig offline gyorsítótár. A jelszót az alkalmazás nem menti el."
+            "adatbázis pedig offline gyorsítótár. Bejelentkezés után a változások "
+            "automatikusan szinkronizálódnak; a jelszót az alkalmazás nem menti el."
         )
         description.setWordWrap(True)
         description.setObjectName("pageSubtitle")
@@ -288,7 +322,74 @@ class SettingsPage(QWidget):
         self.cloud_password_input.clear()
         self.cloud_download_button.setEnabled(True)
         self.cloud_upload_button.setEnabled(True)
-        self.cloud_status.setText("Bejelentkezve. A felhőkapcsolat használatra kész.")
+        self.cloud_status.setText("Bejelentkezve. Az automatikus szinkron elindult…")
+        self._download_timer.start()
+        self._start_cloud_sync("download")
+
+    def schedule_auto_upload(self) -> None:
+        if not self.cloud_sync.is_signed_in:
+            return
+        self._pending_upload = True
+        self._upload_timer.start()
+
+    def _start_cloud_sync(self, operation: str) -> None:
+        if not self.cloud_sync.is_signed_in:
+            return
+        if operation == "download" and (
+            self._pending_upload or self._upload_timer.isActive()
+        ):
+            return
+        if self._cloud_busy:
+            if operation == "upload":
+                self._pending_upload = True
+            return
+        self._cloud_busy = True
+        if operation == "upload":
+            self._pending_upload = False
+        self.cloud_status.setText(
+            "Helyi változások feltöltése…" if operation == "upload"
+            else "Felhőadatok frissítése…"
+        )
+        thread = QThread(self)
+        worker = CloudSyncWorker(self.cloud_sync, operation)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self._cloud_sync_finished)
+        worker.failed.connect(self._cloud_sync_failed)
+        worker.finished.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self._cloud_thread_finished)
+        self._sync_thread = thread
+        self._sync_worker = worker
+        thread.start()
+
+    @Slot()
+    def _cloud_thread_finished(self) -> None:
+        self._cloud_busy = False
+        self._sync_thread = None
+        self._sync_worker = None
+        if self._pending_upload:
+            self._upload_timer.start(250)
+
+    @Slot(str, dict)
+    def _cloud_sync_finished(self, operation: str, counts: dict) -> None:
+        if operation == "upload":
+            self.cloud_status.setText("Minden helyi változás a felhőben van.")
+        else:
+            self.cloud_status.setText(
+                f"Naprakész: {counts['guests']} vendég, {counts['tasks']} teendő, "
+                f"{counts['entries']} szolgáltatás."
+            )
+            self.data_changed.emit()
+
+    @Slot(str, str)
+    def _cloud_sync_failed(self, operation: str, error: str) -> None:
+        self.cloud_status.setText(
+            "A háttérszinkron most nem sikerült; az offline adatok megmaradtak. "
+            f"Részletek: {error}"
+        )
 
     def _cloud_download(self) -> None:
         if QMessageBox.question(
@@ -297,32 +398,10 @@ class SettingsPage(QWidget):
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         ) != QMessageBox.Yes:
             return
-        try:
-            counts = self.cloud_sync.download_to_cache()
-        except SupabaseSyncError as error:
-            QMessageBox.critical(self, "Szinkronizálási hiba", str(error))
-            return
-        self.cloud_status.setText(
-            f"Letöltve: {counts['guests']} vendég, {counts['tasks']} teendő, "
-            f"{counts['entries']} szolgáltatás."
-        )
-        self.data_changed.emit()
+        self._start_cloud_sync("download")
 
     def _cloud_upload(self) -> None:
-        try:
-            counts = self.cloud_sync.upload_cache()
-        except SupabaseSyncError as error:
-            QMessageBox.critical(self, "Szinkronizálási hiba", str(error))
-            return
-        self.cloud_status.setText(
-            f"Feltöltve: {counts['guests']} vendég, {counts['tables']} asztal, "
-            f"{counts['groups']} meghívási csoport."
-        )
-        QMessageBox.information(
-            self, "Szinkronizálás kész",
-            "A helyi módosítások felkerültek a felhőbe. A legfrissebb központi "
-            "állapothoz ezután használd a letöltést."
-        )
+        self._start_cloud_sync("upload")
 
     def _create_wedding_tab(self) -> QWidget:
         page = QWidget()

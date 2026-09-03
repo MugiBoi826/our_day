@@ -55,7 +55,9 @@ class MainWindow(QMainWindow):
         )
         for p in (self.dashboard,self.entries,self.services,self.tasks,self.lists,self.seating,self.statistics,self.settings): self.pages.addWidget(p)
         self.sidebar=Sidebar(); self.sidebar.page_selected.connect(self._change)
-        self.entries.data_changed.connect(self._refresh); self.services.data_changed.connect(self._refresh); self.tasks.data_changed.connect(self._refresh); self.lists.data_changed.connect(self._refresh); self.seating.data_changed.connect(self._refresh); self.settings.data_changed.connect(self._refresh)
+        for page in (self.entries, self.services, self.tasks, self.lists, self.seating):
+            page.data_changed.connect(self._content_changed)
+        self.settings.data_changed.connect(self._refresh)
         self.dashboard.create_service_requested.connect(
             self.services.open_create_dialog
         )
@@ -173,6 +175,10 @@ class MainWindow(QMainWindow):
     def _change(self, index):
         self.pages.setCurrentIndex(index)
         self._refresh()
+
+    def _content_changed(self):
+        self._refresh()
+        self.settings.schedule_auto_upload()
 
     def _create_dashboard_backup(self):
         default_name = (

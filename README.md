@@ -258,3 +258,11 @@ Nyisd meg a kiadott mobiloldalt a telefon böngészőjében, jelentkezz be ugyan
 a Supabase-fiókkal, majd telepítsd a kezdőképernyőre. Android/Chrome alatt a
 menü **Telepítés** vagy **Hozzáadás a kezdőképernyőhöz**, iPhone/Safari alatt a
 **Megosztás → Főképernyőhöz adás** ponttal érhető el.
+
+
+## 0.27.1 Automatikus felhőszinkron
+
+- bejelentkezés után automatikus kezdeti letöltés
+- desktopos módosítások automatikus feltöltése rövid késleltetéssel
+- mobilos változások percenkénti automatikus átvétele
+- hálózati hiba esetén az SQLite offline adatok változatlanul megmaradnak

@@ -1,0 +1,10 @@
+{
+  "name": "Our Day Mobil",
+  "short_name": "Our Day",
+  "description": "Az esküvőszervezés mindig kéznél.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fcfaf7",
+  "theme_color": "#62405f",
+  "lang": "hu"
+}

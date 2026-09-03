@@ -49,4 +49,13 @@ def test_seating_page_initializes_runtime_state() -> None:
     assert "self.guests = []" in source
     assert "self.tables = []" in source
     assert "self.preference_map = {}" in source
-    assert "class MovableTableItem(QGraphicsObject)" in source
+    table_item_path = (
+        Path(__file__).parents[1]
+        / "src"
+        / "our_day"
+        / "ui"
+        / "seating"
+        / "table_item.py"
+    )
+    table_item_source = table_item_path.read_text(encoding="utf-8")
+    assert "class MovableTableItem(QGraphicsObject)" in table_item_source

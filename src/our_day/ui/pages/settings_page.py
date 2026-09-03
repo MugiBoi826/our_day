@@ -1,6 +1,6 @@
 from datetime import date
 
-from PySide6.QtCore import QDate, Signal
+from PySide6.QtCore import QDate, QSettings, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -28,6 +28,10 @@ from PySide6.QtWidgets import (
 from our_day.models.guest_table import GuestTable
 from our_day.models.wedding import Wedding
 from our_day.services.database_service import DatabaseService
+from our_day.services.supabase_sync_service import (
+    SupabaseSyncError,
+    SupabaseSyncService,
+)
 
 
 class TableDialog(QDialog):
@@ -171,6 +175,7 @@ class SettingsPage(QWidget):
         self.table_repository = table_repository
         self.preference_repository = preference_repository
         self.wedding_repository = wedding_repository
+        self.cloud_sync = SupabaseSyncService()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(36, 30, 36, 30)
@@ -198,8 +203,126 @@ class SettingsPage(QWidget):
             self._create_database_tab(),
             "Adatbázis",
         )
+        tabs.addTab(self._create_cloud_tab(), "Felhőszinkron")
 
         layout.addWidget(tabs, 1)
+
+    def _create_cloud_tab(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(16)
+
+        title = QLabel("Supabase felhőszinkron")
+        title.setObjectName("sectionTitle")
+        description = QLabel(
+            "A Supabase a központi adatforrás, az ezen a gépen lévő SQLite "
+            "adatbázis pedig offline gyorsítótár. A jelszót az alkalmazás nem menti el."
+        )
+        description.setWordWrap(True)
+        description.setObjectName("pageSubtitle")
+
+        settings = QSettings("Our Day", "Our Day")
+        self.cloud_email_input = QLineEdit()
+        self.cloud_email_input.setText(settings.value("cloud/email", ""))
+        self.cloud_email_input.setPlaceholderText("Supabase-fiók e-mail-címe")
+        self.cloud_password_input = QLineEdit()
+        self.cloud_password_input.setEchoMode(QLineEdit.Password)
+        self.cloud_password_input.setPlaceholderText("Jelszó")
+
+        form = QFormLayout()
+        form.addRow("E-mail", self.cloud_email_input)
+        form.addRow("Jelszó", self.cloud_password_input)
+
+        self.cloud_login_button = QPushButton("Bejelentkezés")
+        self.cloud_login_button.setObjectName("primaryButton")
+        self.cloud_login_button.clicked.connect(self._cloud_login)
+
+        self.cloud_download_button = QPushButton("Felhőadatok letöltése")
+        self.cloud_download_button.setObjectName("primaryButton")
+        self.cloud_download_button.setEnabled(False)
+        self.cloud_download_button.clicked.connect(self._cloud_download)
+
+        self.cloud_upload_button = QPushButton("Offline módosítások feltöltése")
+        self.cloud_upload_button.setObjectName("secondaryButton")
+        self.cloud_upload_button.setEnabled(False)
+        self.cloud_upload_button.clicked.connect(self._cloud_upload)
+
+        buttons = QHBoxLayout()
+        buttons.addWidget(self.cloud_login_button)
+        buttons.addWidget(self.cloud_download_button)
+        buttons.addWidget(self.cloud_upload_button)
+        buttons.addStretch()
+
+        self.cloud_status = QLabel("Nincs bejelentkezve.")
+        self.cloud_status.setWordWrap(True)
+
+        warning = QLabel(
+            "A letöltés a helyi gyorsítótárat a felhő aktuális állapotára cseréli. "
+            "Ha offline dolgoztál, előbb töltsd fel a módosításokat."
+        )
+        warning.setWordWrap(True)
+        warning.setObjectName("pageSubtitle")
+
+        layout.addWidget(title)
+        layout.addWidget(description)
+        layout.addLayout(form)
+        layout.addLayout(buttons)
+        layout.addWidget(self.cloud_status)
+        layout.addWidget(warning)
+        layout.addStretch()
+        return page
+
+    def _cloud_login(self) -> None:
+        email = self.cloud_email_input.text().strip()
+        password = self.cloud_password_input.text()
+        if not email or not password:
+            QMessageBox.warning(self, "Hiányzó adatok", "Add meg az e-mail-címet és a jelszót.")
+            return
+        try:
+            self.cloud_sync.sign_in(email, password)
+        except SupabaseSyncError as error:
+            QMessageBox.critical(self, "Bejelentkezési hiba", str(error))
+            return
+        QSettings("Our Day", "Our Day").setValue("cloud/email", email)
+        self.cloud_password_input.clear()
+        self.cloud_download_button.setEnabled(True)
+        self.cloud_upload_button.setEnabled(True)
+        self.cloud_status.setText("Bejelentkezve. A felhőkapcsolat használatra kész.")
+
+    def _cloud_download(self) -> None:
+        if QMessageBox.question(
+            self, "Helyi gyorsítótár frissítése",
+            "A helyi adatokat lecseréljük a Supabase aktuális adataira. Folytatod?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        try:
+            counts = self.cloud_sync.download_to_cache()
+        except SupabaseSyncError as error:
+            QMessageBox.critical(self, "Szinkronizálási hiba", str(error))
+            return
+        self.cloud_status.setText(
+            f"Letöltve: {counts['guests']} vendég, {counts['tasks']} teendő, "
+            f"{counts['entries']} szolgáltatás."
+        )
+        self.data_changed.emit()
+
+    def _cloud_upload(self) -> None:
+        try:
+            counts = self.cloud_sync.upload_cache()
+        except SupabaseSyncError as error:
+            QMessageBox.critical(self, "Szinkronizálási hiba", str(error))
+            return
+        self.cloud_status.setText(
+            f"Feltöltve: {counts['guests']} vendég, {counts['tables']} asztal, "
+            f"{counts['groups']} meghívási csoport."
+        )
+        QMessageBox.information(
+            self, "Szinkronizálás kész",
+            "A helyi módosítások felkerültek a felhőbe. A legfrissebb központi "
+            "állapothoz ezután használd a letöltést."
+        )
 
     def _create_wedding_tab(self) -> QWidget:
         page = QWidget()

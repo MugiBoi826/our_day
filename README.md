@@ -241,3 +241,20 @@ A Catering lap tartalmazza:
 - asztalonkénti étrend- és allergiaszámok
 - kapacitás, szabad hely és túlfoglalási állapot
 - teljes összesítő sort
+
+
+## 0.27.0 Mobilalkalmazás és felhőszinkron
+
+- új, telefonra telepíthető Our Day webalkalmazás Supabase háttérrel
+- mobilos vendég-, teendő- és szolgáltatáskezelés
+- közös, bejelentkezéshez kötött felhőadatbázis
+- új Felhőszinkron lap az asztali alkalmazás Beállításaiban
+- a Supabase a központi adatforrás, a helyi SQLite adatbázis offline gyorsítótár
+- külön felhőletöltés és offline módosításfeltöltés a biztonságos kezeléshez
+
+### Használat telefonon
+
+Nyisd meg a kiadott mobiloldalt a telefon böngészőjében, jelentkezz be ugyanazzal
+a Supabase-fiókkal, majd telepítsd a kezdőképernyőre. Android/Chrome alatt a
+menü **Telepítés** vagy **Hozzáadás a kezdőképernyőhöz**, iPhone/Safari alatt a
+**Megosztás → Főképernyőhöz adás** ponttal érhető el.

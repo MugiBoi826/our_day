@@ -266,3 +266,13 @@ menü **Telepítés** vagy **Hozzáadás a kezdőképernyőhöz**, iPhone/Safari
 - desktopos módosítások automatikus feltöltése rövid késleltetéssel
 - mobilos változások percenkénti automatikus átvétele
 - hálózati hiba esetén az SQLite offline adatok változatlanul megmaradnak
+
+
+## 0.28.0 Mobil költségek, csoportok és szinkronjavítások
+
+- részletes költségösszesítő és szolgáltatói bontás a mobil főoldalon
+- meghívási csoportok mobilos létrehozása és szerkesztése
+- vendégek csoporthoz rendelése, valamint csoport szerinti szűrése
+- mobilos alapbeállítások a dátumhoz, helyszínhez és költségkerethez
+- mobilon és asztali gépen 30 másodpercenkénti automatikus frissítés
+- javított helyi azonosító-, kapcsolat-, törlés- és duplikációkezelés

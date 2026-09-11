@@ -120,7 +120,11 @@ class SupabaseSyncService:
                 "name", "group_type", "contact_name", "email", "phone",
                 "invitation_sent_date", "rsvp_due_date", "notes", "updated_at",
             ))
+            preference_map = self._upsert_rows(
+                connection, "guest_preferences", wedding_id, ("category", "name")
+            )
             guest_map = self._upsert_guests(connection, wedding_id, table_map, group_map)
+            self._upload_guest_links(connection, guest_map, group_map, preference_map)
             self._upsert_rows(connection, "tasks", wedding_id, (
                 "title", "description", "due_date", "priority", "status", "updated_at",
             ))
@@ -129,6 +133,7 @@ class SupabaseSyncService:
                 "deposit_amount", "total_amount", "status", "deposit_due_date",
                 "deposit_paid_date", "payment_due_date", "updated_at",
             ))
+            self._delete_removed_rows(connection, wedding_id)
         return {
             "guests": len(guest_map), "tables": len(table_map), "groups": len(group_map)
         }
@@ -205,6 +210,7 @@ class SupabaseSyncService:
                  row.get("created_at") or "1970-01-01 00:00:00"),
             )
             mapping[row["id"]] = local_id
+            self._store_legacy_id("guest_tables", row, local_id)
         return mapping
 
     def _insert_groups(self, connection, rows):
@@ -222,6 +228,7 @@ class SupabaseSyncService:
                  row.get("updated_at") or "1970-01-01 00:00:00"),
             )
             mapping[row["id"]] = local_id
+            self._store_legacy_id("invitation_groups", row, local_id)
         return mapping
 
     def _insert_preferences(self, connection, rows):
@@ -231,6 +238,7 @@ class SupabaseSyncService:
             connection.execute("INSERT INTO guest_preferences(id,category,name) VALUES(?,?,?)",
                                (local_id, row["category"], row["name"]))
             mapping[row["id"]] = local_id
+            self._store_legacy_id("guest_preferences", row, local_id)
         return mapping
 
     def _insert_guests(self, connection, rows, table_map, group_map):
@@ -254,6 +262,7 @@ class SupabaseSyncService:
                  row.get("updated_at") or "1970-01-01 00:00:00"),
             )
             mapping[row["id"]] = local_id
+            self._store_legacy_id("guests", row, local_id)
         return mapping
 
     @staticmethod
@@ -265,8 +274,7 @@ class SupabaseSyncService:
             connection.execute("UPDATE invitation_groups SET contact_guest_id=? WHERE id=?",
                                (guest_map.get(row.get("contact_guest_id")), group_map[row["id"]]))
 
-    @staticmethod
-    def _insert_simple(connection, table, rows):
+    def _insert_simple(self, connection, table, rows):
         allowed = {
             "tasks": ("title","description","due_date","priority","status","created_at","updated_at"),
             "entries": ("entry_type","title","description","contact_name","phone","email","deposit_amount",
@@ -284,6 +292,14 @@ class SupabaseSyncService:
             )
             connection.execute(f"INSERT INTO {table}({columns}) VALUES({marks})",
                                (local_id,) + values)
+            self._store_legacy_id(table, row, local_id)
+
+    def _store_legacy_id(self, table: str, row: dict, local_id: int) -> None:
+        if row.get("legacy_id") is None:
+            self._request(
+                "PATCH", f"/rest/v1/{table}?id=eq.{row['id']}",
+                {"legacy_id": local_id},
+            )
 
     @staticmethod
     def _insert_relations(connection, preference_links, seating_links, guest_map, preference_map):
@@ -329,3 +345,66 @@ class SupabaseSyncService:
             if result:
                 mapping[row["id"]] = result[0]["id"]
         return mapping
+
+    def _upload_guest_links(self, connection, guest_map, group_map, preference_map):
+        for row in connection.execute(
+            "SELECT id,parent_guest_id FROM guests WHERE parent_guest_id IS NOT NULL"
+        ):
+            if row["id"] in guest_map and row["parent_guest_id"] in guest_map:
+                self._request(
+                    "PATCH", f"/rest/v1/guests?id=eq.{guest_map[row['id']]}",
+                    {"parent_guest_id": guest_map[row["parent_guest_id"]]},
+                )
+        for row in connection.execute(
+            "SELECT id,contact_guest_id FROM invitation_groups WHERE contact_guest_id IS NOT NULL"
+        ):
+            if row["id"] in group_map and row["contact_guest_id"] in guest_map:
+                self._request(
+                    "PATCH", f"/rest/v1/invitation_groups?id=eq.{group_map[row['id']]}",
+                    {"contact_guest_id": guest_map[row["contact_guest_id"]]},
+                )
+
+        cloud_guest_ids = list(guest_map.values())
+        if cloud_guest_ids:
+            ids = quote(",".join(cloud_guest_ids), safe=",")
+            self._request(
+                "DELETE", f"/rest/v1/guest_preference_rel?guest_id=in.({ids})"
+            )
+            self._request(
+                "DELETE", f"/rest/v1/guest_seating_preferences?guest_id=in.({ids})"
+            )
+        for row in connection.execute("SELECT guest_id,preference_id FROM guest_preference_rel"):
+            if row["guest_id"] in guest_map and row["preference_id"] in preference_map:
+                self._request("POST", "/rest/v1/guest_preference_rel", {
+                    "guest_id": guest_map[row["guest_id"]],
+                    "preference_id": preference_map[row["preference_id"]],
+                })
+        for row in connection.execute(
+            "SELECT guest_id,related_guest_id,relation_type FROM guest_seating_preferences"
+        ):
+            if row["guest_id"] in guest_map and row["related_guest_id"] in guest_map:
+                self._request("POST", "/rest/v1/guest_seating_preferences", {
+                    "guest_id": guest_map[row["guest_id"]],
+                    "related_guest_id": guest_map[row["related_guest_id"]],
+                    "relation_type": row["relation_type"],
+                })
+
+    def _delete_removed_rows(self, connection, wedding_id: str) -> None:
+        """Propagate desktop deletions without touching never-downloaded cloud rows."""
+        for table in (
+            "guests", "invitation_groups", "guest_preferences",
+            "guest_tables", "tasks", "entries",
+        ):
+            local_ids = {
+                int(row[0]) for row in connection.execute(f"SELECT id FROM {table}")
+            }
+            cloud_rows = self._request(
+                "GET",
+                f"/rest/v1/{table}?select=id,legacy_id&wedding_id=eq.{wedding_id}&limit=10000",
+            ) or []
+            for cloud_row in cloud_rows:
+                legacy_id = cloud_row.get("legacy_id")
+                if legacy_id is not None and int(legacy_id) not in local_ids:
+                    self._request(
+                        "DELETE", f"/rest/v1/{table}?id=eq.{cloud_row['id']}"
+                    )

@@ -207,7 +207,7 @@ class SettingsPage(QWidget):
         self._upload_timer.setInterval(1500)
         self._upload_timer.timeout.connect(lambda: self._start_cloud_sync("upload"))
         self._download_timer = QTimer(self)
-        self._download_timer.setInterval(60_000)
+        self._download_timer.setInterval(30_000)
         self._download_timer.timeout.connect(lambda: self._start_cloud_sync("download"))
 
         layout = QVBoxLayout(self)

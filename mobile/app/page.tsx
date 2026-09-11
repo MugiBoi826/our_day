@@ -6,9 +6,11 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { importDesktopDatabase } from '@/lib/importDesktop';
 import { TasksPanel } from '@/components/TasksPanel';
 import { ServicesPanel } from '@/components/ServicesPanel';
+import { GroupsPanel, type InvitationGroup } from '@/components/GroupsPanel';
+import { WeddingSettingsPanel, type WeddingSettings } from '@/components/WeddingSettingsPanel';
 
 type Tab = 'Kezdőlap' | 'Vendégek' | 'Teendők' | 'Szolgáltatók' | 'Továbbiak';
-type Wedding = { id: string; bride_name: string; groom_name: string; wedding_date: string | null; venue_name: string | null; budget_amount: number };
+type Wedding = WeddingSettings;
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -24,7 +26,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!supabase || !user) { setWedding(null); return; }
-    supabase.from('weddings').select('id,bride_name,groom_name,wedding_date,venue_name,budget_amount').order('created_at').limit(1).maybeSingle()
+    supabase.from('weddings').select('id,bride_name,groom_name,wedding_date,venue_name,venue_address,budget_amount,notes').order('created_at').limit(1).maybeSingle()
       .then(({ data }) => setWedding(data as Wedding | null));
   }, [user]);
 
@@ -32,7 +34,7 @@ export default function Home() {
   if (!isSupabaseConfigured || !supabase) return <MessageScreen title="Helyi mód" message="A felhőkapcsolat még nincs beállítva." />;
   if (!user) return <AuthScreen />;
   if (!wedding) return <WeddingSetup user={user} onCreated={setWedding} />;
-  return <Dashboard user={user} wedding={wedding} />;
+  return <Dashboard user={user} wedding={wedding} onWeddingChanged={setWedding} />;
 }
 
 function AuthScreen() {
@@ -81,10 +83,11 @@ function WeddingSetup({ user, onCreated }: { user: User; onCreated: (wedding: We
     </form></section></main>;
 }
 
-function Dashboard({ user, wedding }: { user: User; wedding: Wedding }) {
+function Dashboard({ user, wedding, onWeddingChanged }: { user: User; wedding: Wedding; onWeddingChanged: (value: Wedding) => void }) {
   const [activeTab, setActiveTab] = useState<Tab>('Kezdőlap');
   const [cloudTasks, setCloudTasks] = useState<Array<{ id: string; title: string; due_date: string | null; priority: string; status: string }>>([]);
   const [cloudGuests, setCloudGuests] = useState<Array<{ id: string; name: string; attendance_status: string; table_id: string | null }>>([]);
+  const [costs, setCosts] = useState<Array<{ id: string; title: string; total_amount: number; deposit_amount: number; status: string }>>([]);
   const [summary, setSummary] = useState({ guests: 0, confirmed: 0, assigned: 0, planned: 0 });
   const daysLeft = useMemo(() => wedding.wedding_date ? Math.max(0, Math.ceil((new Date(`${wedding.wedding_date}T12:00:00`).getTime() - Date.now()) / 86_400_000)) : 0, [wedding.wedding_date]);
   const dateLabel = wedding.wedding_date ? new Intl.DateTimeFormat('hu-HU', { dateStyle: 'long' }).format(new Date(`${wedding.wedding_date}T12:00:00`)) : 'A dátum még nincs megadva';
@@ -97,15 +100,18 @@ function Dashboard({ user, wedding }: { user: User; wedding: Wedding }) {
         supabase!.from('guests').select('id', { count: 'exact', head: true }).eq('wedding_id', wedding.id).eq('attendance_status', 'Részt vesz'),
         supabase!.from('guests').select('id', { count: 'exact', head: true }).eq('wedding_id', wedding.id).not('table_id', 'is', null),
         supabase!.from('tasks').select('id,title,due_date,priority,status').eq('wedding_id', wedding.id).neq('status', 'Elkészült').order('due_date', { ascending: true, nullsFirst: false }).limit(3),
-        supabase!.from('entries').select('total_amount,status').eq('wedding_id', wedding.id),
+        supabase!.from('entries').select('id,title,total_amount,deposit_amount,status').eq('wedding_id', wedding.id).order('total_amount', { ascending: false }),
       ]);
       setCloudGuests((guestsResult.data ?? []) as typeof cloudGuests);
       setCloudTasks((tasksResult.data ?? []) as typeof cloudTasks);
+      setCosts((entriesResult.data ?? []) as typeof costs);
       const planned = (entriesResult.data ?? []).filter((entry) => !['Ötlet', 'Ajánlatkérés', 'Lemondva'].includes(entry.status)).reduce((sum, entry) => sum + Number(entry.total_amount || 0), 0);
       setSummary({ guests: guestsResult.count ?? 0, confirmed: confirmedResult.count ?? 0, assigned: assignedResult.count ?? 0, planned });
     }
     loadDashboard();
-  }, [wedding.id]);
+    const timer = window.setInterval(loadDashboard, 30_000);
+    return () => window.clearInterval(timer);
+  }, [wedding.id, activeTab]);
 
   async function completeTask(taskId: string) {
     const { error } = await supabase!.from('tasks').update({ status: 'Elkészült' }).eq('id', taskId);
@@ -113,44 +119,57 @@ function Dashboard({ user, wedding }: { user: User; wedding: Wedding }) {
   }
 
   const seatingPercent = summary.guests ? Math.round(summary.assigned / summary.guests * 100) : 0;
+  const paid = costs.filter((entry) => entry.status !== 'Lemondva').reduce((sum, entry) => sum + (entry.status === 'Kifizetve' ? Number(entry.total_amount || 0) : Number(entry.deposit_amount || 0)), 0);
+  const budgetPercent = wedding.budget_amount ? Math.min(100, Math.round(summary.planned / wedding.budget_amount * 100)) : 0;
   return <main className="app-shell">
     <header className="topbar"><div className="brand-mark">O</div><div><p className="eyebrow">OUR DAY</p><p className="welcome">{wedding.bride_name} &amp; {wedding.groom_name}</p></div><span className="cloud-state online">● Online</span><button className="avatar" onClick={() => supabase!.auth.signOut()} title={user.email ?? 'Kijelentkezés'}>{initials}</button></header>
     <div className="content">{activeTab === 'Kezdőlap' ? <>
       <section className="hero"><div className="hero-copy"><span className="hero-label">A nagy napig</span><strong>{daysLeft}</strong><span className="days">nap van hátra</span><h1>{wedding.bride_name} &amp; {wedding.groom_name}</h1><p>{dateLabel}{wedding.venue_name ? ` · ${wedding.venue_name}` : ''}</p></div><div className="rings"><i /><i /></div></section>
       <section className="stats"><article><span>Vendégek</span><strong>{summary.guests}</strong><small>{summary.confirmed} visszajelzett</small></article><article><span>Ültetés</span><strong>{seatingPercent}%</strong><small>{summary.assigned} fő elhelyezve</small></article><article><span>Keret</span><strong>{formatBudget(wedding.budget_amount)}</strong><small>{formatMoney(summary.planned)} tervezve</small></article></section>
+      <section className="section-block budget-card"><div className="section-heading"><div><span className="kicker">PÉNZÜGYI ÁTTEKINTÉS</span><h2>Költségek</h2></div><button onClick={() => setActiveTab('Szolgáltatók')}>Részletek</button></div><div className="budget-numbers"><div><span>Tervezett</span><strong>{formatMoney(summary.planned)}</strong></div><div><span>Kifizetve</span><strong>{formatMoney(paid)}</strong></div><div><span>Szabad keret</span><strong className={wedding.budget_amount - summary.planned < 0 ? 'over-budget' : ''}>{formatMoney(wedding.budget_amount - summary.planned)}</strong></div></div><div className="budget-track"><i style={{ width: `${budgetPercent}%` }} /></div><small className="budget-caption">A keret {budgetPercent}%-a lekötve</small><div className="cost-preview">{costs.filter((item) => item.status !== 'Lemondva').slice(0, 4).map((item) => <div key={item.id}><span>{item.title}<small>{item.status}</small></span><strong>{formatMoney(item.total_amount)}</strong></div>)}</div></section>
       <section className="section-block"><div className="section-heading"><div><span className="kicker">Következő lépések</span><h2>Teendők</h2></div><button onClick={() => setActiveTab('Teendők')}>Összes</button></div><div className="task-list">{cloudTasks.length ? cloudTasks.map((task) => <button className="task" key={task.id} onClick={() => completeTask(task.id)}><span className="check" /><span className="task-copy"><strong>{task.title}</strong><small>{formatDate(task.due_date)} · {task.priority} prioritás</small></span><span className="chevron">›</span></button>) : <p className="empty-list">Nincs nyitott teendő.</p>}</div></section>
       <section className="section-block"><div className="section-heading"><div><span className="kicker">Felhőből betöltve</span><h2>Vendégek</h2></div><button onClick={() => setActiveTab('Vendégek')}>Megnyitás</button></div><div className="guest-list">{cloudGuests.length ? cloudGuests.map((guest) => <article className="guest" key={guest.id}><span className="guest-avatar">{guest.name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</span><span><strong>{guest.name}</strong><small>{guest.table_id ? 'Asztalhoz rendelve' : 'Nincs asztal'}</small></span><em className={guest.attendance_status === 'Részt vesz' ? 'yes' : 'waiting'}>{guest.attendance_status}</em></article>) : <p className="empty-list">Még nincs vendég.</p>}</div></section>
-    </> : activeTab === 'Vendégek' ? <GuestsPanel weddingId={wedding.id} /> : activeTab === 'Teendők' ? <TasksPanel weddingId={wedding.id} /> : activeTab === 'Szolgáltatók' ? <ServicesPanel weddingId={wedding.id} /> : <ImportPanel weddingId={wedding.id} />}</div>
+    </> : activeTab === 'Vendégek' ? <GuestsPanel weddingId={wedding.id} /> : activeTab === 'Teendők' ? <TasksPanel weddingId={wedding.id} /> : activeTab === 'Szolgáltatók' ? <ServicesPanel weddingId={wedding.id} /> : <MorePanel wedding={wedding} onWeddingChanged={onWeddingChanged} />}</div>
     <nav className="bottom-nav five-tabs">{(['Kezdőlap','Vendégek','Teendők','Szolgáltatók','Továbbiak'] as Tab[]).map(tab=><button key={tab} className={activeTab===tab?'active':''} onClick={()=>setActiveTab(tab)}><span>{tab==='Kezdőlap'?'⌂':tab==='Vendégek'?'♧':tab==='Teendők'?'✓':tab==='Szolgáltatók'?'₣':'•••'}</span>{tab}</button>)}</nav>
   </main>;
 }
 
 function GuestsPanel({ weddingId }: { weddingId: string }) {
-  type GuestRecord = { id: string; name: string; email: string | null; phone: string | null; guest_type: string; attendance_status: string; invitation_status: string; table_id: string | null; attends_dinner: boolean; dietary_notes: string | null; notes: string | null };
+  type GuestRecord = { id: string; name: string; email: string | null; phone: string | null; guest_type: string; attendance_status: string; invitation_status: string; invitation_group_id: string | null; table_id: string | null; attends_dinner: boolean; dietary_notes: string | null; notes: string | null };
   const [guests, setGuests] = useState<GuestRecord[]>([]); const [editing, setEditing] = useState<GuestRecord | 'new' | null>(null);
-  const [query, setQuery] = useState(''); const [filter, setFilter] = useState('Mind'); const [loading, setLoading] = useState(true);
-  async function loadGuests() { setLoading(true); const { data } = await supabase!.from('guests').select('id,name,email,phone,guest_type,attendance_status,invitation_status,table_id,attends_dinner,dietary_notes,notes').eq('wedding_id', weddingId).order('name'); setGuests((data ?? []) as GuestRecord[]); setLoading(false); }
-  useEffect(() => { loadGuests(); }, [weddingId]);
-  const visible = guests.filter((guest) => guest.name.toLocaleLowerCase('hu').includes(query.toLocaleLowerCase('hu')) && (filter === 'Mind' || guest.attendance_status === filter));
+  const [groups, setGroups] = useState<InvitationGroup[]>([]);
+  const [query, setQuery] = useState(''); const [filter, setFilter] = useState('Mind'); const [groupFilter, setGroupFilter] = useState('Mind'); const [loading, setLoading] = useState(true);
+  async function loadGuests() { setLoading(true); const [guestResult, groupResult] = await Promise.all([supabase!.from('guests').select('id,name,email,phone,guest_type,attendance_status,invitation_status,invitation_group_id,table_id,attends_dinner,dietary_notes,notes').eq('wedding_id', weddingId).order('name'), supabase!.from('invitation_groups').select('id,name,group_type,contact_name,email,phone,rsvp_due_date,notes').eq('wedding_id', weddingId).order('name')]); setGuests((guestResult.data ?? []) as GuestRecord[]); setGroups((groupResult.data ?? []) as InvitationGroup[]); setLoading(false); }
+  useEffect(() => { loadGuests(); const timer = window.setInterval(loadGuests, 30_000); return () => window.clearInterval(timer); }, [weddingId]);
+  const visible = guests.filter((guest) => guest.name.toLocaleLowerCase('hu').includes(query.toLocaleLowerCase('hu')) && (filter === 'Mind' || guest.attendance_status === filter) && (groupFilter === 'Mind' || (groupFilter === 'Nincs csoport' ? !guest.invitation_group_id : guest.invitation_group_id === groupFilter)));
   return <section className="list-page"><div className="list-title"><div><p className="eyebrow">MEGHÍVOTTAK</p><h1>Vendégek</h1></div><div className="list-actions"><strong>{guests.length} fő</strong><button onClick={() => setEditing('new')} aria-label="Új vendég">＋</button></div></div>
     <input className="search-input" type="search" placeholder="Keresés név alapján…" value={query} onChange={(event) => setQuery(event.target.value)} />
+    <label className="group-filter"><span>Meghívási csoport</span><select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}><option value="Mind">Minden csoport</option><option value="Nincs csoport">Csoport nélkül</option>{groups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label>
     <div className="filter-row">{['Mind', 'Részt vesz', 'Válaszra vár', 'Nem vesz részt'].map((item) => <button key={item} className={filter === item ? 'active' : ''} onClick={() => setFilter(item)}>{item}</button>)}</div>
-    <div className="guest-list full-list">{loading ? <p className="empty-list">Vendégek betöltése…</p> : visible.length ? visible.map((guest) => <button className="guest guest-button" key={guest.id} onClick={() => setEditing(guest)}><span className="guest-avatar">{guest.name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</span><span><strong>{guest.name}</strong><small>{guest.email || guest.invitation_status}</small></span><em className={guest.attendance_status === 'Részt vesz' ? 'yes' : 'waiting'}>{guest.attendance_status}</em></button>) : <p className="empty-list">Nincs találat.</p>}</div>
-    {editing && <GuestEditor weddingId={weddingId} guest={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); loadGuests(); }} />}
+    <div className="guest-list full-list">{loading ? <p className="empty-list">Vendégek betöltése…</p> : visible.length ? visible.map((guest) => <button className="guest guest-button" key={guest.id} onClick={() => setEditing(guest)}><span className="guest-avatar">{guest.name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</span><span><strong>{guest.name}</strong><small>{groups.find((group) => group.id === guest.invitation_group_id)?.name || guest.email || guest.invitation_status}</small></span><em className={guest.attendance_status === 'Részt vesz' ? 'yes' : 'waiting'}>{guest.attendance_status}</em></button>) : <p className="empty-list">Nincs találat.</p>}</div>
+    {editing && <GuestEditor weddingId={weddingId} groups={groups} guest={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); loadGuests(); }} />}
   </section>;
 }
 
-function GuestEditor({ weddingId, guest, onClose, onSaved }: { weddingId: string; guest: { id: string; name: string; email: string | null; phone: string | null; guest_type: string; attendance_status: string; invitation_status: string; attends_dinner: boolean; dietary_notes: string | null; notes: string | null } | null; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ name: guest?.name ?? '', email: guest?.email ?? '', phone: guest?.phone ?? '', guest_type: guest?.guest_type ?? 'Felnőtt', attendance_status: guest?.attendance_status ?? 'Válaszra vár', invitation_status: guest?.invitation_status ?? 'Tervezett', attends_dinner: guest?.attends_dinner ?? true, dietary_notes: guest?.dietary_notes ?? '', notes: guest?.notes ?? '' });
+function GuestEditor({ weddingId, guest, groups, onClose, onSaved }: { weddingId: string; guest: { id: string; name: string; email: string | null; phone: string | null; guest_type: string; attendance_status: string; invitation_status: string; invitation_group_id: string | null; attends_dinner: boolean; dietary_notes: string | null; notes: string | null } | null; groups: InvitationGroup[]; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({ name: guest?.name ?? '', email: guest?.email ?? '', phone: guest?.phone ?? '', guest_type: guest?.guest_type ?? 'Felnőtt', attendance_status: guest?.attendance_status ?? 'Válaszra vár', invitation_status: guest?.invitation_status ?? 'Tervezett', invitation_group_id: guest?.invitation_group_id ?? '', attends_dinner: guest?.attends_dinner ?? true, dietary_notes: guest?.dietary_notes ?? '', notes: guest?.notes ?? '' });
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
   function field(name: keyof typeof form, value: string | boolean) { setForm((current) => ({ ...current, [name]: value })); }
-  async function save(event: FormEvent) { event.preventDefault(); setBusy(true); setMessage(''); const payload = { ...form, email: form.email || null, phone: form.phone || null, dietary_notes: form.dietary_notes || null, notes: form.notes || null }; const result = guest ? await supabase!.from('guests').update(payload).eq('id', guest.id) : await supabase!.from('guests').insert({ ...payload, wedding_id: weddingId }); setBusy(false); if (result.error) setMessage(result.error.message); else onSaved(); }
+  async function save(event: FormEvent) { event.preventDefault(); setBusy(true); setMessage(''); const payload = { ...form, email: form.email || null, phone: form.phone || null, invitation_group_id: form.invitation_group_id || null, dietary_notes: form.dietary_notes || null, notes: form.notes || null, updated_at: new Date().toISOString() }; const result = guest ? await supabase!.from('guests').update(payload).eq('id', guest.id) : await supabase!.from('guests').insert({ ...payload, wedding_id: weddingId }); setBusy(false); if (result.error) setMessage(result.error.message); else onSaved(); }
   return <div className="modal-backdrop" role="dialog" aria-modal="true"><section className="editor-card"><div className="editor-heading"><div><p className="eyebrow">{guest ? 'SZERKESZTÉS' : 'ÚJ MEGHÍVOTT'}</p><h2>{guest ? guest.name : 'Vendég felvétele'}</h2></div><button onClick={onClose} aria-label="Bezárás">×</button></div><form onSubmit={save}>
     <label>Név<input value={form.name} onChange={(e) => field('name', e.target.value)} required /></label><div className="form-row"><label>Email<input type="email" value={form.email} onChange={(e) => field('email', e.target.value)} /></label><label>Telefon<input value={form.phone} onChange={(e) => field('phone', e.target.value)} /></label></div>
     <div className="form-row"><label>Vendégtípus<select value={form.guest_type} onChange={(e) => field('guest_type', e.target.value)}><option>Felnőtt</option><option>Gyermek</option></select></label><label>Részvétel<select value={form.attendance_status} onChange={(e) => field('attendance_status', e.target.value)}><option>Válaszra vár</option><option>Részt vesz</option><option>Nem vesz részt</option></select></label></div>
-    <label>Meghívás állapota<select value={form.invitation_status} onChange={(e) => field('invitation_status', e.target.value)}><option>Tervezett</option><option>Meghívó elküldve</option><option>Visszajelzett</option></select></label><label className="toggle-label"><input type="checkbox" checked={form.attends_dinner} onChange={(e) => field('attends_dinner', e.target.checked)} /> Részt vesz a vacsorán</label>
+    <label>Meghívási csoport<select value={form.invitation_group_id} onChange={(e) => field('invitation_group_id', e.target.value)}><option value="">Nincs csoport</option>{groups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select></label><label>Meghívás állapota<select value={form.invitation_status} onChange={(e) => field('invitation_status', e.target.value)}><option>Tervezett</option><option>Meghívó elküldve</option><option>Visszajelzett</option></select></label><label className="toggle-label"><input type="checkbox" checked={form.attends_dinner} onChange={(e) => field('attends_dinner', e.target.checked)} /> Részt vesz a vacsorán</label>
     <label>Étrendi igény<textarea value={form.dietary_notes} onChange={(e) => field('dietary_notes', e.target.value)} /></label><label>Megjegyzés<textarea value={form.notes} onChange={(e) => field('notes', e.target.value)} /></label>{message && <p className="form-message">{message}</p>}<button className="primary-action" disabled={busy}>{busy ? 'Mentés…' : 'Mentés'}</button>
   </form></section></div>;
+}
+
+function MorePanel({ wedding, onWeddingChanged }: { wedding: Wedding; onWeddingChanged: (value: Wedding) => void }) {
+  const [view, setView] = useState<'menu' | 'groups' | 'settings' | 'import'>('menu');
+  if (view === 'groups') return <GroupsPanel weddingId={wedding.id} onBack={() => setView('menu')} />;
+  if (view === 'settings') return <WeddingSettingsPanel wedding={wedding} onBack={() => setView('menu')} onSaved={onWeddingChanged} />;
+  if (view === 'import') return <div><button className="back-link import-back" onClick={() => setView('menu')}>‹ Továbbiak</button><ImportPanel weddingId={wedding.id} /></div>;
+  return <section className="more-page"><p className="eyebrow">KEZELÉS</p><h1>Továbbiak</h1><div className="more-grid"><button onClick={() => setView('groups')}><span>♧</span><strong>Meghívási csoportok</strong><small>Családok, barátok és kapcsolattartók</small></button><button onClick={() => setView('settings')}><span>⚙</span><strong>Alapbeállítások</strong><small>Dátum, helyszín és költségkeret</small></button><button onClick={() => setView('import')}><span>⇧</span><strong>Adatok importálása</strong><small>Korábbi asztali mentés betöltése</small></button><button onClick={() => supabase!.auth.signOut()}><span>↪</span><strong>Kijelentkezés</strong><small>A helyi munkamenet bezárása</small></button></div></section>;
 }
 
 function ImportPanel({ weddingId }: { weddingId: string }) {

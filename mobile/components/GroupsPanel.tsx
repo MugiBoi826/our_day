@@ -55,6 +55,12 @@ function GroupEditor({ weddingId, group, onClose, onSaved }: { weddingId: string
     const result = group ? await supabase!.from('invitation_groups').update(payload).eq('id', group.id) : await supabase!.from('invitation_groups').insert({ ...payload, wedding_id: weddingId });
     setBusy(false); if (result.error) setMessage(result.error.message); else onSaved();
   }
+  async function remove() {
+    if (!group || !window.confirm(`Biztosan törlöd ezt a csoportot: ${group.name}? A vendégek megmaradnak, de kikerülnek a csoportból.`)) return;
+    setBusy(true); setMessage('');
+    const result = await supabase!.from('invitation_groups').delete().eq('id', group.id).eq('wedding_id', weddingId);
+    setBusy(false); if (result.error) setMessage(result.error.message); else onSaved();
+  }
   return <div className="modal-backdrop" role="dialog" aria-modal="true"><section className="editor-card"><div className="editor-heading"><div><p className="eyebrow">MEGHÍVÁSI CSOPORT</p><h2>{group ? group.name : 'Új csoport'}</h2></div><button onClick={onClose} aria-label="Bezárás">×</button></div><form onSubmit={save}>
     <label>Csoport neve<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
     <label>Típus<select value={form.group_type} onChange={(e) => setForm({ ...form, group_type: e.target.value })}>{['Család','Barátok','Rokonság','Munkahely','Egyéb'].map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -62,6 +68,6 @@ function GroupEditor({ weddingId, group, onClose, onSaved }: { weddingId: string
     <div className="form-row"><label>Email<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label>Telefon<input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label></div>
     <label>Visszajelzési határidő<input type="date" value={form.rsvp_due_date} onChange={(e) => setForm({ ...form, rsvp_due_date: e.target.value })} /></label>
     <label>Megjegyzés<textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
-    {message && <p className="form-message">{message}</p>}<button className="primary-action" disabled={busy}>{busy ? 'Mentés…' : 'Mentés'}</button>
+    {message && <p className="form-message">{message}</p>}<div className="editor-actions"><button className="primary-action" disabled={busy}>{busy ? 'Folyamatban…' : 'Mentés'}</button>{group && <button className="danger-action" type="button" disabled={busy} onClick={remove}>Csoport törlése</button>}</div>
   </form></section></div>;
 }

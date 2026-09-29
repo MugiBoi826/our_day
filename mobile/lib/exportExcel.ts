@@ -25,6 +25,7 @@ export async function exportWeddingToExcel(weddingId: string, weddingLabel: stri
   const labelsFor = (guestId: string, predicate?: (item: Preference) => boolean) => (preferenceIdsByGuest.get(guestId) ?? []).map((id) => preferenceById.get(id)).filter((item): item is Preference => Boolean(item) && (!predicate || predicate(item))).map((item) => item.name).join(', ');
 
   const workbook = new ExcelJS.Workbook(); workbook.creator = 'Our Day Mobil'; workbook.created = new Date();
+  addSummarySheet(workbook, weddingLabel, guests, groups.length, preferenceIdsByGuest);
   const guestSheet = workbook.addWorksheet('Vendégek', { views: [{ state: 'frozen', ySplit: 1 }] });
   guestSheet.columns = [
     ['Meghívási csoport', 24], ['Név', 25], ['Felnőtt / gyermek', 18], ['Meghívás állapota', 20], ['RSVP', 18], ['Vacsora', 12], ['Asztal', 18], ['Telefon', 20], ['E-mail', 28], ['Ételérzékenység / allergia', 34], ['Különleges igények', 34], ['Étrendi megjegyzés', 32], ['Megjegyzés', 32],
@@ -49,6 +50,54 @@ export async function exportWeddingToExcel(weddingId: string, weddingLabel: stri
   anchor.href = url; anchor.download = `our-day-${slug(weddingLabel)}-${new Date().toISOString().slice(0, 10)}.xlsx`; anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   return guests.length;
+}
+
+function addSummarySheet(
+  workbook: ExcelJS.Workbook,
+  weddingLabel: string,
+  guests: Array<{ id: string; guest_type: string; attendance_status: string; attends_dinner: boolean; table_id: string | null }>,
+  groupCount: number,
+  preferenceIdsByGuest: Map<string, string[]>,
+) {
+  const sheet = workbook.addWorksheet('Összesítő', { views: [{ state: 'frozen', ySplit: 3 }] });
+  sheet.columns = [{ width: 24 }, { width: 18 }, { width: 4 }, { width: 24 }, { width: 18 }];
+  sheet.mergeCells('A1:E1'); sheet.getCell('A1').value = 'Our Day – vendégösszesítő';
+  sheet.mergeCells('A2:E2'); sheet.getCell('A2').value = weddingLabel.replaceAll('-', ' ');
+  sheet.getRow(1).height = 34; sheet.getRow(2).height = 24;
+  sheet.getCell('A1').font = { bold: true, size: 22, color: { argb: 'FFFFFFFF' } };
+  sheet.getCell('A2').font = { italic: true, size: 12, color: { argb: 'FFF1EAF8' } };
+  for (const cell of ['A1', 'A2']) { sheet.getCell(cell).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF6B4EA0' } }; sheet.getCell(cell).alignment = { vertical: 'middle', horizontal: 'left' }; }
+
+  const total = guests.length;
+  const metrics: Array<[string, number]> = [
+    ['Összes vendég', total],
+    ['Felnőtt', guests.filter((guest) => guest.guest_type === 'Felnőtt').length],
+    ['Gyermek', guests.filter((guest) => guest.guest_type === 'Gyermek').length],
+    ['Részt vesz', guests.filter((guest) => guest.attendance_status === 'Részt vesz').length],
+    ['Válaszra vár', guests.filter((guest) => guest.attendance_status === 'Válaszra vár').length],
+    ['Nem vesz részt', guests.filter((guest) => guest.attendance_status === 'Nem vesz részt').length],
+    ['Vacsorán részt vesz', guests.filter((guest) => guest.attends_dinner).length],
+    ['Speciális igénnyel', guests.filter((guest) => (preferenceIdsByGuest.get(guest.id)?.length ?? 0) > 0).length],
+    ['Asztalhoz rendelve', guests.filter((guest) => Boolean(guest.table_id)).length],
+    ['Meghívási csoportok', groupCount],
+  ];
+  metrics.forEach(([label, value], index) => {
+    const row = 4 + Math.floor(index / 2) * 3; const column = index % 2 === 0 ? 1 : 4;
+    const labelCell = sheet.getCell(row, column); const valueCell = sheet.getCell(row + 1, column);
+    sheet.mergeCells(row, column, row, column + 1); sheet.mergeCells(row + 1, column, row + 1, column + 1);
+    labelCell.value = label; valueCell.value = value;
+    labelCell.font = { bold: true, size: 11, color: { argb: 'FF6B4EA0' } }; valueCell.font = { bold: true, size: 22, color: { argb: 'FF2E2530' } };
+    labelCell.fill = valueCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4EEF8' } };
+    labelCell.alignment = valueCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    labelCell.border = { top: { style: 'thin', color: { argb: 'FFE1D7E8' } }, left: { style: 'thin', color: { argb: 'FFE1D7E8' } }, right: { style: 'thin', color: { argb: 'FFE1D7E8' } } };
+    valueCell.border = { bottom: { style: 'thin', color: { argb: 'FFE1D7E8' } }, left: { style: 'thin', color: { argb: 'FFE1D7E8' } }, right: { style: 'thin', color: { argb: 'FFE1D7E8' } } };
+    sheet.getRow(row).height = 24; sheet.getRow(row + 1).height = 34;
+  });
+
+  const responseRate = total ? Math.round((guests.filter((guest) => guest.attendance_status !== 'Válaszra vár').length / total) * 100) : 0;
+  sheet.mergeCells('A20:E20'); sheet.getCell('A20').value = `RSVP válaszadási arány: ${responseRate}%`;
+  sheet.getCell('A20').font = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } }; sheet.getCell('A20').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF6B4EA0' } }; sheet.getCell('A20').alignment = { horizontal: 'center', vertical: 'middle' }; sheet.getRow(20).height = 30;
+  sheet.mergeCells('A22:E22'); sheet.getCell('A22').value = `Exportálva: ${new Intl.DateTimeFormat('hu-HU', { dateStyle: 'long' }).format(new Date())}`; sheet.getCell('A22').font = { size: 10, color: { argb: 'FF766B74' } }; sheet.getCell('A22').alignment = { horizontal: 'right' };
 }
 
 function styleSheet(sheet: ExcelJS.Worksheet) {
